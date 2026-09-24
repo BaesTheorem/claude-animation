@@ -1,0 +1,177 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["numpy"]
+# ///
+"""sfx-mix: lay sound effects on a timeline, mix them with the music and mux into a rendered video.
+
+    bin/sfx-mix src/scenes/dungeon.sfx.json --video=out/dungeon.mp4 --out=out/dungeon_sfx.mp4
+    bin/sfx-mix src/scenes/dungeon.sfx.json --wav=out/check/mix.wav          audio only, for checking
+
+The cue sheet (JSON):
+    { "music": "assets/song.mp3", "music_gain": .7, "sfx_gain": .75, "duration": 31.5, "sfx_dir": "assets/sfx",
+      "cues": [ cue, ... ] }
+A cue places one sound at time t (seconds):
+    { "t": 4.81, "src": "doorOpen_1.ogg", "gain": .8 }
+  file options: gain, rate (playback speed: > 1 is higher and shorter, cartoon style), lowpass (Hz, e.g. muffled
+                underwater), offset/dur (seconds into the file / length to keep), fade (fade-out seconds at the end)
+  repeats:      "every": .19, "until": 1.95 (re-fire until that time); "src" may be a list, cycled per hit;
+                "jitter": .1 varies rate and gain per hit so repeats don't sound copied
+  synths:       "src": "synth:slide" (slide whistle, f0 → f1 Hz over dur), "synth:whoosh" (a noise band sweeping
+                f0 → f1), "synth:bubbles" (dense little bubble blips, rate = bubbles/s), "synth:tweet"
+                (birdie chirps, rate = chirps/s), "synth:hum" (a rising buzzy charge-up, f0 → f1)
+Sounds are resampled to 48 kHz stereo by ffmpeg; the sum is soft-limited so stacked hits don't clip.
+"""
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+import numpy as np
+
+SR = 48000
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def decode(path, rate=1.0, lowpass=None, offset=0.0, dur=None):
+    af = []
+    if rate != 1.0:
+        af += [f"asetrate={int(SR * rate)}", f"aresample={SR}"]
+    if lowpass:
+        af.append(f"lowpass=f={lowpass}")
+    cmd = ["ffmpeg", "-v", "error", "-ss", str(offset)] + (["-t", str(dur * rate)] if dur else []) + ["-i", str(path)]
+    cmd += (["-af", ",".join(af)] if af else []) + ["-f", "f32le", "-ac", "2", "-ar", str(SR), "-"]
+    raw = subprocess.run(cmd, capture_output=True, check=True).stdout
+    return np.frombuffer(raw, dtype=np.float32).reshape(-1, 2).copy()
+
+
+def env(n, attack=.01, release=.1):
+    e = np.ones(n)
+    a, r = min(n, int(attack * SR)), min(n, int(release * SR))
+    if a: e[:a] = np.linspace(0, 1, a)
+    if r: e[n - r:] *= np.linspace(1, 0, r)
+    return e
+
+
+def synth(kind, c, rng):
+    dur = c.get("dur", 1.0)
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    f0, f1 = c.get("f0", 800), c.get("f1", 200)
+    if kind == "slide":   # slide whistle: an exponential glide with a little vibrato and breath
+        f = f0 * (f1 / f0) ** (t / dur) * (1 + .012 * np.sin(2 * np.pi * 6 * t))
+        y = np.sin(2 * np.pi * np.cumsum(f) / SR) + .08 * rng.standard_normal(n) * np.sin(2 * np.pi * np.cumsum(f) / SR) ** 2
+        y *= env(n, .03, .15) * .5
+    elif kind == "whoosh":   # a band of noise sweeping f0 → f1, built in the STFT domain
+        hop, win = 512, 2048
+        frames = n // hop + 1
+        freqs = np.fft.rfftfreq(win, 1 / SR)
+        out = np.zeros(n + win)
+        w = np.hanning(win)
+        for i in range(frames):
+            k = i / max(1, frames - 1)
+            fc = f0 * (f1 / f0) ** k
+            mag = np.exp(-.5 * ((np.log(freqs + 1) - np.log(fc)) / c.get("width", .45)) ** 2)
+            spec = mag * np.exp(2j * np.pi * rng.random(len(freqs)))
+            out[i * hop:i * hop + win] += np.fft.irfft(spec) * w
+        y = out[:n]
+        y = y / (np.abs(y).max() + 1e-9) * np.sin(np.pi * np.clip(t / dur, 0, 1)) ** 1.5 * .6
+    elif kind == "bubbles":   # Minnaert-style bubbles: short decaying sine chirps that rise in pitch
+        y = np.zeros(n)
+        for _ in range(int(c.get("rate", 12) * dur)):
+            s = int(rng.random() * n)
+            fb = rng.uniform(f1, f0)
+            L = int(.06 * SR)
+            tt = np.arange(L) / SR
+            b = np.sin(2 * np.pi * fb * (tt + 6 * tt * tt)) * np.exp(-tt / .018) * rng.uniform(.3, 1)
+            e = min(n, s + L); y[s:e] += b[:e - s]
+        y *= .35
+    elif kind == "tweet":   # birdie chirps circling a dizzy head: fast upward sine sweeps in pairs
+        y = np.zeros(n)
+        for i in range(int(c.get("rate", 4) * dur)):
+            s = int((i / c.get("rate", 4) + rng.uniform(0, .05)) * SR)
+            for j in range(2):
+                L = int(.07 * SR); tt = np.arange(L) / SR
+                fb = rng.uniform(f0, f1)
+                ch = np.sin(2 * np.pi * (fb * tt + fb * 2.5 * tt * tt / .07)) * np.sin(np.pi * tt / .07)
+                a = s + j * int(.09 * SR); e = min(n, a + L)
+                if a < n: y[a:e] += ch[:e - a] * .3
+    elif kind == "hum":   # a charge-up: buzzy harmonics rising f0 → f1 with a quickening tremolo
+        f = f0 * (f1 / f0) ** (t / dur)
+        ph = 2 * np.pi * np.cumsum(f) / SR
+        y = sum(np.sin(h * ph) / h for h in range(1, 7))
+        y *= (.6 + .4 * np.sin(2 * np.pi * (4 + 18 * t / dur) * t)) * (t / dur) ** .7 * env(n, .05, .05) * .35
+    else:
+        sys.exit(f"unknown synth: {kind}")
+    return np.stack([y, y], axis=1).astype(np.float32)
+
+
+def expand(cues):
+    out = []
+    for c in cues:
+        srcs = c["src"] if isinstance(c["src"], list) else [c["src"]]
+        if "every" in c:
+            t, i = c["t"], 0
+            while t <= c["until"] + 1e-9:
+                out.append({**c, "t": round(t, 4), "src": srcs[i % len(srcs)], "_hit": i}); t += c["every"]; i += 1
+        else:
+            out.append({**c, "src": srcs[0], "_hit": 0})
+    return out
+
+
+def mix(sheet):
+    dur = sheet["duration"]
+    bus = np.zeros((int(dur * SR) + SR, 2), dtype=np.float32)
+    sfx_dir = ROOT / sheet.get("sfx_dir", "assets/sfx")
+    rng = np.random.default_rng(sheet.get("seed", 7))
+    for c in expand(sheet["cues"]):
+        j = c.get("jitter", 0)
+        rate = c.get("rate", 1.0) * (1 + j * rng.uniform(-1, 1)) if j else c.get("rate", 1.0)
+        gain = c.get("gain", 1.0) * (1 + .5 * j * rng.uniform(-1, 1)) if j else c.get("gain", 1.0)
+        if c["src"].startswith("synth:"):
+            y = synth(c["src"][6:], c, rng)
+            if c.get("lowpass"):   # muffle a synth the same way ffmpeg muffles a file
+                y = np.frombuffer(subprocess.run(["ffmpeg", "-v", "error", "-f", "f32le", "-ar", str(SR), "-ac", "2", "-i", "-", "-af", f"lowpass=f={c['lowpass']}",
+                                                  "-f", "f32le", "-ac", "2", "-ar", str(SR), "-"], input=y.tobytes(), capture_output=True, check=True).stdout, dtype=np.float32).reshape(-1, 2)
+        else:
+            y = decode(sfx_dir / c["src"], rate, c.get("lowpass"), c.get("offset", 0), c.get("dur"))
+        if c.get("fade"):
+            k = min(len(y), int(c["fade"] * SR)); y[len(y) - k:] *= np.linspace(1, 0, k)[:, None]
+        s = int(c["t"] * SR); e = min(len(bus), s + len(y))
+        bus[s:e] += y[:e - s] * gain
+    bus *= sheet.get("sfx_gain", 1.0)
+    sfx_peak = np.abs(bus).max()
+    if sheet.get("music"):
+        m = decode(ROOT / sheet["music"]) * sheet.get("music_gain", .7)
+        k = min(len(bus), len(m)); bus[:k] += m[:k]
+    bus = bus[:int(dur * SR)]
+    out = np.tanh(bus * 1.1) / np.tanh(1.1) * .8   # soft limiter with a ceiling low enough that AAC's intersample peaks stay under 0 dBFS
+    print(f"{len(expand(sheet['cues']))} sfx hits, sfx peak {sfx_peak:.2f}, mix peak {np.abs(bus).max():.2f} before limiting")
+    return out.astype(np.float32)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("sheet", type=Path)
+    ap.add_argument("--video", type=Path)
+    ap.add_argument("--out", type=Path)
+    ap.add_argument("--wav", type=Path)
+    a = ap.parse_args()
+    audio = mix(json.loads(a.sheet.read_text()))
+    wav = a.wav or Path("out/check/_mix.f32")
+    wav.parent.mkdir(parents=True, exist_ok=True)
+    raw = wav.with_suffix(".f32"); audio.tofile(raw)
+    if a.wav:
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "f32le", "-ar", str(SR), "-ac", "2", "-i", str(raw), str(a.wav)], check=True)
+        print(f"wrote {a.wav}")
+    if a.video:
+        out = a.out or a.video.with_name(a.video.stem + "_sfx.mp4")
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(a.video), "-f", "f32le", "-ar", str(SR), "-ac", "2", "-i", str(raw),
+                        "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", str(out)], check=True)
+        print(f"wrote {out}")
+    raw.unlink(missing_ok=True)
+
+
+if __name__ == "__main__":
+    main()
