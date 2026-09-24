@@ -52,16 +52,19 @@ def detect(audio: Path, bpm_hint: float | None):
     beats = np.asarray(beats, dtype=float)
     if len(beats) < 8:
         sys.exit(f"only {len(beats)} beats found in {audio}: pass --bpm and set offset by hand")
-    # Fit one beat phase to the whole track instead of trusting the first tracked beat,
-    # which is often a stray onset in the intro.
+    # Phase: slide a beat grid across one period in 5 ms steps and keep the offset whose grid
+    # lands on the most onset energy. The tracker's own beats drift a quarter beat on
+    # syncopated tracks (pizzicato off-beats on "Sneaky Adventure": 0.482 vs a true 0.325).
     period = 60.0 / bpm
-    phases = np.mod(beats, period)
-    ang = phases / period * 2 * np.pi
-    phase = (np.angle(np.mean(np.exp(1j * ang))) % (2 * np.pi)) / (2 * np.pi) * period
-    first = beats[0] - ((beats[0] - phase) % period)
-    if first < 0:
-        first += period
-    return round(duration, 2), round(bpm, 2), round(float(first), 3)
+    times = librosa.times_like(onset, sr=sr)
+    energy = lambda off: onset[np.searchsorted(times, np.arange(off, times[-1], period)).clip(0, len(onset) - 1)].mean()
+    offs = np.arange(0, period, .005)
+    scores = np.array([energy(o) for o in offs])
+    first = float(offs[scores.argmax()])
+    ratio = scores.max() / max(energy((first + period / 2) % period), 1e-9)
+    print(f"beat phase: on-beat energy is {ratio:.2f}x the half-beat's"
+          + ("  (weak: check the offset against the audio)" if ratio < 1.25 else ""), file=sys.stderr)
+    return round(duration, 2), round(bpm, 2), round(first, 3)
 
 
 def write_config(duration, bpm, offset, audio_rel):
