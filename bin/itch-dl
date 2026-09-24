@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""itch-dl: list and download files from a free / pay-what-you-want itch.io page (e.g. CC0 asset packs).
+
+    bin/itch-dl https://quaternius.itch.io/universal-base-characters            list the files
+    bin/itch-dl https://quaternius.itch.io/universal-base-characters -o assets/x  download all files
+    bin/itch-dl <url> -o <dir> --match glTF                                      only files whose name contains 'glTF'
+
+It follows the page's own "No thanks, just take me to the downloads" flow: fetch the purchase page for a CSRF
+token, POST /download_url for the download page (the file list), then POST /file/<upload id> from the game page
+for each short-lived signed file URL.
+Only for pages whose owner offers the files free; it never bypasses a payment.
+"""
+import argparse, html, json, os, re, sys, time, urllib.error, urllib.parse, urllib.request, http.cookiejar
+
+UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36'
+jar = http.cookiejar.CookieJar()
+op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+
+
+def req(url, data=None, xhr=False, tries=6):
+    for i in range(tries):
+        r = urllib.request.Request(url, data=urllib.parse.urlencode(data).encode() if data is not None else None,
+                                   headers={'User-Agent': UA, **({'X-Requested-With': 'XMLHttpRequest'} if xhr else {})})
+        try:
+            with op.open(r, timeout=60) as f:
+                return f.read()
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or i == tries - 1:
+                raise
+            wait = 30 * (i + 1)
+            print(f'rate limited, waiting {wait}s', file=sys.stderr, flush=True)
+            time.sleep(wait)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('url')
+    ap.add_argument('-o', '--out')
+    ap.add_argument('--match', default='')
+    a = ap.parse_args()
+    game = a.url.rstrip('/')
+    page = req(game + '/purchase').decode()
+    tok = re.search(r'csrf_token" value="([^"]+)"', page)
+    if not tok:
+        sys.exit('no csrf token: is this a free / pay-what-you-want page?')
+    dl = json.loads(req(game + '/download_url', {'csrf_token': tok.group(1)}, xhr=True))['url']
+    dpage = req(dl).decode()
+    key = dl.rstrip('/').split('/')[-1]
+    tok2 = re.search(r'csrf_token" value="([^"]+)"', dpage) or tok
+    ups = re.findall(r'data-upload_id="(\d+)".*?class="name"[^>]*title="([^"]+)".*?class="file_size"><span>([^<]+)', dpage, re.S)
+    if not ups:
+        ups = [(u, n, '?') for u, n in re.findall(r'data-upload_id="(\d+)"[\s\S]*?title="([^"]+)"', dpage)]
+    for uid, name, size in ups:
+        print(f'{uid}\t{size}\t{html.unescape(name)}')
+    if not a.out:
+        return
+    os.makedirs(a.out, exist_ok=True)
+    for uid, name, size in ups:
+        name = html.unescape(name)
+        if a.match and a.match.lower() not in name.lower():
+            continue
+        dest = os.path.join(a.out, name)
+        if os.path.exists(dest):
+            print('have', dest)
+            continue
+        gtok = re.search(r'csrf_token" value="([^"]+)"', req(game).decode())
+        signed = json.loads(req(f'{game}/file/{uid}?source=view_game&as_props=1&after_download_lightbox=true', {'csrf_token': gtok.group(1)}, xhr=True))['url']
+        print('get', name, size, flush=True)
+        r = urllib.request.Request(signed, headers={'User-Agent': UA})
+        with op.open(r, timeout=600) as f, open(dest + '.part', 'wb') as w:
+            while True:
+                b = f.read(1 << 20)
+                if not b:
+                    break
+                w.write(b)
+        os.replace(dest + '.part', dest)
+    print('done')
+
+
+if __name__ == '__main__':
+    main()

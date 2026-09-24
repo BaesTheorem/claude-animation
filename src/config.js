@@ -2,4 +2,4 @@
 //   duration: the video's length in seconds.
 //   bpm:      the rhythm that bounces, dances and pulse() follow. Clawd always moves to some beat; if the video has music,
 //             set this to the song's tempo, and set offset to the time in seconds of its first downbeat.
-const PROJECT = { duration: 292.8, bpm: 112.35, offset: 0.24, audio: "assets/artesian.mp3" };
+const PROJECT = { duration: 301.16, bpm: 112.35, offset: 1.14, audio: "assets/artesian3.mp3" };

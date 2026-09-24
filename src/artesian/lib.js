@@ -282,6 +282,7 @@ setup = async function () {
   TXT = document.createElement('canvas'); TXT.width = W; TXT.height = H; TEXT_TOOTH = makeTextTooth();
   const faces = [['Kalam', 'Kalam-Regular.ttf'], ['Kalam Bold', 'Kalam-Bold.ttf'], ['Cabin Sketch', 'CabinSketch-Bold.ttf']];
   await Promise.all(faces.map(async ([n, f]) => { const ff = new FontFace(n, `url(assets/fonts/${f})`); await ff.load(); document.fonts.add(ff); }));
+  if (window.PEOPLE) await PEOPLE.ready;    // 3D cast and motion clips (v2)
   window.ready = true;
 };
 drawWorld = function (t) {

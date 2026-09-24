@@ -3,3 +3,7 @@ out/
 assets/*.mp3
 assets/*.wav
 assets/*.flac
+assets/quaternius/
+assets/cast/
+assets/anim/
+assets/animals/
