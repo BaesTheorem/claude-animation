@@ -219,10 +219,11 @@ function scribbleWipe(p, col = AP.graphite) {
 // Paper wipe: a sheet of blank paper slides across (like turning a sketchbook page). dir +1 = left→right.
 function pageTurn(p, dir = 1) {
   if (p <= 0 || p >= 1) return;
-  const k = p < .5 ? easeIn(p * 2) : 1 + easeOut((p - .5) * 2), x = dir > 0 ? lerp(-W - 100, W + 200, k / 2) : lerp(W + 100, -W - 200, k / 2);
-  const edge = dir > 0 ? x + W : x;
-  X.save(); X.fillStyle = AP.paper; X.fillRect(dir > 0 ? x : x, -20, W + 20, H + 40);
-  X.globalAlpha = .9; X.drawImage(paperG.elt, 0, 0, W, H, x, 0, W, H); X.restore();
+  // the sheet slides in until it covers the whole frame at p = .5 (cut there), then carries on out the far side
+  const x = p < .5 ? (dir > 0 ? lerp(-W - 60, -20, easeIn(p * 2)) : lerp(W + 60, -20, easeIn(p * 2))) : (dir > 0 ? lerp(-20, W + 60, easeOut((p - .5) * 2)) : lerp(-20, -W - 100, easeOut((p - .5) * 2)));
+  const edge = (dir > 0) === (p < .5) ? x + W + 40 : x;
+  X.save(); X.fillStyle = AP.paper; X.fillRect(x, -20, W + 40, H + 40);
+  X.globalAlpha = .9; X.drawImage(paperG.elt, 0, 0, W, H, x, 0, W + 40, H); X.restore();
   pline([[edge, -20], [edge + 8, H / 2], [edge, H + 20]], 1.2, AP.graphiteLt);
 }
 // Fade to/from blank paper (pencil lines "lifting" off the page).
@@ -231,7 +232,7 @@ function paperFade(k) { if (k <= 0) return; X.save(); X.globalAlpha = clamp(k); 
 // ---------- lyric band: the ballad hand-lettered along the foot of the page ----------
 const BAND_TOP = 902, BAND_Y = 968;   // keep story action above ~y 890
 let TEXT_TOOTH = null, TXT = null;
-function lyricAt(t) { let i = -1; for (let k = 0; k < LYRICS.length; k++) if (t >= LYRICS[k].start - .15) i = k; return i; }
+function lyricAt(t) { let i = -1; for (let k = 0; k < LYRICS.length; k++) if (t >= LYRICS[k].start - .35) i = k; return i; }
 function lyricBand(t) {
   if (window.NO_BAND) return;
   X.setTransform(1, 0, 0, 1, 0, 0); ZOOM = 1;
@@ -257,8 +258,10 @@ function lyricBand(t) {
   if (i < 0) draw('ARTESIAN  WATER', easeOut(seg(t, .5, 3)), 1, BAND_Y, 80, AP.graphite, '"Cabin Sketch", serif');
   else {
     const L = LYRICS[i], sungEnd = Math.min(L.end, L.start + Math.max(1.4, (L.end - L.start) * .78));
-    const k = easeOut(seg(t, L.start - .15, sungEnd)), fin = i >= 54 && i <= 58, chorus = /^(Sinking|Oh we'll sink)/.test(L.text);
-    if (i > 0 && t < L.start + .5) { const q = seg(t, L.start - .15, L.start + .5); draw(LYRICS[i - 1].text, 1, 1 - q, BAND_Y - 36 * q, 58, AP.graphite, '"Kalam", cursive'); }
+    // the old line lifts and fades just before the new one starts writing, so the two never overlap
+    const k = easeOut(seg(t, L.start - .08, sungEnd)), fin = i >= 54 && i <= 58, chorus = /^(Sinking|Oh we'll sink)/.test(L.text);
+    if (i > 0 && t < L.start - .05) { const P0 = LYRICS[i - 1], q = seg(t, L.start - .35, L.start - .05), f0 = i - 1 >= 54 && i - 1 <= 58, c0 = /^(Sinking|Oh we'll sink)/.test(P0.text);
+      draw(P0.text, 1, 1 - q, BAND_Y - 26 * q, f0 ? 68 : c0 ? 64 : 58, f0 ? AP.rust : c0 ? AP.earthDk : AP.graphite, f0 || c0 ? '"Kalam Bold", cursive' : '"Kalam", cursive'); }
     draw(L.text, k, 1, BAND_Y, fin ? 68 : chorus ? 64 : 58, fin ? AP.rust : chorus ? AP.earthDk : AP.graphite, fin || chorus ? '"Kalam Bold", cursive' : '"Kalam", cursive');
   }
   c.save(); c.globalCompositeOperation = 'destination-out'; c.drawImage(TEXT_TOOTH, 0, 0); c.restore();

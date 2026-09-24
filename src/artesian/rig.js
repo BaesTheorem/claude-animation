@@ -237,8 +237,9 @@ function kp(t, keys, e = ease) {
 // Common working poses (side view). Mix with kp() and the beat.
 const POSES = {
   stand:   { shF: .08, elF: .2, shB: -.1, elB: .25 },
-  // sledgehammer: raise (wind-up high over the back shoulder) → strike (driven down in front)
-  hamUp:   { lean: -.12, shF: -2.6, elF: .5, shB: -2.4, elB: .35, hpF: .25, knF: .15, hpB: -.2, knB: .1, head: -.25, face: 'grit' },
+  // sledgehammer: raise (wind-up high over the back shoulder) → strike (driven down in front). hamUp's arm angles are
+  // stored past +π so kp(hamDown → hamUp) swings forward and OVER the head, never under.
+  hamUp:   { lean: -.12, shF: TAU - 2.6, elF: .5, shB: TAU - 2.4, elB: .35, hpF: .25, knF: .15, hpB: -.2, knB: .1, head: -.25, face: 'grit' },
   hamDown: { lean: .45, shF: .9, elF: -.1, shB: .75, elB: .05, hpF: .45, knF: .55, hpB: -.25, knB: .35, head: .2, face: 'shout', mouth: .4 },
   // hauling on a rope or a lever, leaning back
   haul:    { lean: -.35, shF: 1.2, elF: .3, shB: 1.35, elB: .15, hpF: .45, knF: .2, hpB: -.35, knB: .25, face: 'grit' },

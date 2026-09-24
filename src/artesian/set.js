@@ -143,11 +143,12 @@ function derrick(x, y, h, o = {}) {
   return { top, floor: [x, y], hole: [x, y], crown: [x, y - h - h * .012] };
 }
 function beam(x, y, s, ph = 0, o = {}) {
-  // walking beam: pivot on the samson post at (x, y - 3s); the well end (left) rises then drops on the blow
+  // walking beam: pivot on the samson post at (x, y - (o.post ?? 3) s); the well end (left) rises slowly over ph 0..0.7,
+  // then drops fast and lands on ph = 1 (put ph = frac(bpOf(t)) to land every beat)
   seed('beam');
-  const lift = o.stuck ? .15 * Math.sin(ph * TAU * 3) : (ph < .7 ? easeOut(ph / .7) : 1 - easeIn((ph - .7) / .3)), ang = lerp(.16, -.16, lift) * (o.amp ?? 1);
-  const pv = [x, y - 3 * s], wellEnd = polar(pv, Math.PI + ang, 4.2 * s), crankEnd = polar(pv, ang, 2.6 * s);
-  pfill([[x - .5 * s, y], [x - .2 * s, y - 3 * s], [x + .2 * s, y - 3 * s], [x + .5 * s, y]], AP.timberDk, { tone: .7, sw: 1 });
+  const lift = o.stuck ? .15 * Math.sin(ph * TAU * 3) : (ph < .7 ? easeOut(ph / .7) : 1 - easeIn((ph - .7) / .3)), ang = lerp(-.16, .16, lift) * (o.amp ?? 1);
+  const post = o.post ?? 3, pv = [x, y - post * s], wellEnd = polar(pv, Math.PI + ang, 4.2 * s), crankEnd = polar(pv, ang, 2.6 * s);
+  pfill([[x - .5 * s, y], [x - .2 * s, y - post * s], [x + .2 * s, y - post * s], [x + .5 * s, y]], AP.timberDk, { tone: .7, sw: 1 });
   pfill(limb([wellEnd, pv, crankEnd], [.35 * s, .5 * s, .35 * s]), AP.timber, { tone: .7, dens: .9, sw: 1.2 });
   pfill(ellPts(...pv, .18 * s, .18 * s, 10), AP.iron, { tone: .9, sw: .8 });
   return { wellEnd, crankEnd, pivot: pv, lift };
@@ -204,7 +205,7 @@ function engine(x, y, s, o = {}) {
   const wh = [X0 - 3.6 * s, by - 2.3 * s];
   pfill(rectPts(wh[0] - .15 * s, wh[1] - .9 * s, .3 * s, .9 * s), AP.brass, { tone: .9, sw: .8 });
   if (o.whistle) for (let i = 0; i < 6; i++) { const k = frac(T * 2.2 + i / 6); psmoke(wh[0] + (hash(i) - .5) * s * k, wh[1] - 1 * s - k * 7 * s * o.whistle, s * (.4 + k * 2.2) * o.whistle, AP.paperLt, .75 * (1 - k)); }
-  if (o.smoke ?? 1) for (let i = 0; i < 5; i++) { const k = frac(ph * 2 + i / 5); psmoke(stackTop[0] - k * 3 * s + Math.sin(k * 5 + i) * s * .4, stackTop[1] - .6 * s - k * 5 * s, s * (.5 + k * 1.6), AP.smoke, .55 * (1 - k) * (o.smoke ?? 1)); }
+  if (o.smoke ?? 1) for (let i = 0; i < 5; i++) { const k = frac((o.smokePh ?? ph) * 2 + i / 5); psmoke(stackTop[0] - k * 3 * s + Math.sin(k * 5 + i) * s * .4, stackTop[1] - .6 * s - k * 5 * s, s * (.5 + k * 1.6), AP.smoke, .55 * (1 - k) * (o.smoke ?? 1)); }
   return { stack: stackTop, whistle: wh, door, fly, gauge: gc, boilerY: by };
 }
 
@@ -308,13 +309,14 @@ function stream(P, w, t, o = {}) {
 
 // ---------- the chorus dive (shared, so all eight choruses rhyme) ----------
 // A camera fall down the bore through the strata to the bit, which strikes on every beat. Call from a shot:
-//   dive(t, lt, dur, { from: 0, to: 600, hits: true, extra: (depthNow) => { ... world-space extras ... } })
+//   dive(t, lt, dur, { from: 0, to: 600, hits: true, extra: (depthNow, bitD) => {...}, over: (depthNow, bitD) => {...} })
+// extra draws under the shaft and rods, over draws on top of them (both in world space).
 // from/to are depths in ft for the camera over the shot (eased, with a small bounce each beat as the bit lands);
 // bitDepth defaults to o.to. zoom (default .55). o.up: true reverses (water rushing up: see chapter G).
 function dive(t, lt, dur, o = {}) {
   const k = o.k ?? ease(seg(lt, .2, dur - .3)), dCam = lerp(o.from ?? 0, o.to ?? 600, k), z = o.zoom ?? .55;
   const bitD = o.bitDepth ?? (o.to ?? 600), hit = o.hits === false ? 0 : pulse(t, 7);
-  const bob = o.hits === false ? 0 : -18 * Math.exp(-frac(bpOf(t)) * 9);   // rods kick up and drop onto the rock each beat
+  const fb = frac(bpOf(t)), bob = o.hits === false ? 0 : -18 * easeOut(clamp((fb - .45) / .4)) * (1 - easeIn(clamp((fb - .85) / .15)));   // rods rise late in the beat and slam down ON it
   const cx = o.x ?? 960, sh = shakeXY(t, hit * 5);
   camOn(cx + sh[0], dCam * FT + (o.lead ?? 140) / z + sh[1], z);
   if (dCam * FT - 900 / z < 0) {   // near the surface: sky and the derrick silhouette above ground
@@ -326,6 +328,7 @@ function dive(t, lt, dur, o = {}) {
   shaft(cx, bitD);
   rods(cx, -40, bitD * FT - 50 + bob, { w: 14, bend: o.bend || 0, col: AP.pine });
   bit(cx, bitD * FT + bob, 34, { hit: o.hits === false ? 0 : hit });
+  if (o.over) o.over(dCam, bitD);
   ruler(cx - 520, dCam - 1100 / z / FT, dCam + 1100 / z / FT, bitD);
   camOff();
 }
