@@ -1,0 +1,3 @@
+Music (video/dungeon): first 31.5 s of "Sneaky Adventure" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License. http://creativecommons.org/licenses/by/4.0/
+The audio file itself is not committed: fetch https://incompetech.com/music/royalty-free/mp3-royaltyfree/Sneaky%20Adventure.mp3 into assets/SneakyAdventure.mp3 and trim with
+  ffmpeg -i assets/SneakyAdventure.mp3 -t 31.5 -af "afade=t=out:st=29.3:d=2.2" assets/sneaky_31.mp3
