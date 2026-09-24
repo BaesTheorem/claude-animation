@@ -124,6 +124,7 @@ const P3 = (() => {
         bool ground = style > 0.75 && style < 0.85, skin = style > 0.85 && style < 0.95, wat = style > 0.45 && style < 0.55;
         if (style > 0.55 && style < 0.65) { T *= 0.2; L *= 0.4; }
         if (skin) { L *= 0.55; }
+        if (ground) { T = smoothstep(0.25, 1.0, T) * 0.75; }   // broad flat ground: only real shadow gets dark hatching
         float sc = uHatch * (ground ? 0.5 : skin ? 0.4 : 0.6);
         vec3 shadowCol = mix(a * 0.5, vec3(0.16, 0.17, 0.3), 0.35);
         // burnished tone of the local colour, then the pencil layers over it
