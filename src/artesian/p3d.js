@@ -11,7 +11,8 @@
 //   P3.mesh(geom, col, o)              a mesh with pencil material; o.cast/o.receive shadows (default true)
 //   P3.draw(scene, cam, o)             render into the pencil layer X over whatever 2D is already drawn there
 //                                      o.fog = [near, far] (ft), o.fogCol, o.ink (line colour), o.lineW, o.hatch (scale),
-//                                      o.tone (burnish), o.alpha
+//                                      o.tone (burnish), o.alpha, o.lightTint (0..1: how much light colour tints surfaces),
+//                                      o.clear (default true: solid geometry clears the 2D behind it to paper)
 //   P3.box / P3.cyl / P3.beam(a, b, w, d)  geometry helpers (beam: a timber between two points)
 //   P3.project(cam, [x,y,z]) → [sx, sy, depth]   put 2D effects (psmoke, pglow, sparks) on a 3D point
 //   P3.lamp(sc, [x,y,z], col, k, dist)     warm point light with shadows (lantern, firebox, forge)
@@ -62,7 +63,7 @@ const P3 = (() => {
     precision highp float;
     varying vec2 vUv;
     uniform sampler2D tBeauty, tAlbedo, tNormal, tDepth, tTam, tTam2, tTooth;
-    uniform vec2 uRes; uniform float uBoil, uHand, uNear, uFar, uFogN, uFogF, uLineW, uHatch, uTone, uAlpha, uInkOn;
+    uniform vec2 uRes; uniform float uBoil, uHand, uNear, uFar, uFogN, uFogF, uLineW, uHatch, uTone, uAlpha, uInkOn, uWarm, uMask;
     uniform vec3 uFogCol, uInk, uPaperLt;
     float luma(vec3 c){ return dot(c, vec3(.299,.587,.114)); }
     float lin(float z){ float n = z * 2.0 - 1.0; return 2.0 * uNear * uFar / (uFar + uNear - n * (uFar - uNear)); }
@@ -100,12 +101,17 @@ const P3 = (() => {
       }
       float dist = lin(d0);
       float fog = geo > 0.0 ? smoothstep(uFogN, uFogF, dist) : 1.0;
+      // mask pass: solid geometry clears what's behind it (sky, sun) to bare paper, except where atmosphere fades it
+      if (uMask > 0.5) { gl_FragColor = vec4(1.0, 1.0, 1.0, geo > 0.0 ? (1.0 - fog) * uAlpha : 0.0); return; }
       float tooth = texture2D(tTooth, px / 512.0).r;
       vec4 outc = vec4(0.0);
       if (geo > 0.0) {
         vec3 al = A.rgb, bl = texture2D(tBeauty, vUv).rgb;
         float s = clamp(luma(bl) / max(luma(al), 0.004), 0.0, 1.8);   // light factor, from linear buffers
         vec3 a = pow(al, vec3(1.0 / 2.2));                              // local colour back in display space
+        // light colour: the hue the lights put on the surface (warm lantern, orange sunset), luminance-normalised
+        vec3 tint = bl / max(al, vec3(0.004)); tint /= max(luma(tint), 0.02); tint = clamp(tint, 0.0, 2.2);
+        a = mix(a, clamp(a * pow(tint, vec3(0.75)), 0.0, 1.0), clamp(s * 0.9, 0.0, 1.0) * uWarm);
         float T = clamp(1.0 - s * 0.85, 0.0, 1.0), L = 1.0 - luma(a);
         vec3 n = texture2D(tNormal, vUv).xyz * 2.0 - 1.0;
         // style id rides in the albedo alpha: 1 = default, .8 = ground (strokes follow the horizon), .6 = glowing/no dark
@@ -158,7 +164,7 @@ const P3 = (() => {
       uniforms: { tBeauty: { value: RT_B.texture }, tAlbedo: { value: RT_A.texture }, tNormal: { value: RT_N.texture }, tDepth: { value: RT_N.depthTexture },
         tTam: { value: TAM }, tTam2: { value: TAM2 }, tTooth: { value: TOOTH }, uRes: { value: new THREE.Vector2(W, H) }, uBoil: { value: 0 }, uHand: { value: -1.05 },
         uNear: { value: .5 }, uFar: { value: 5000 }, uFogN: { value: 300 }, uFogF: { value: 3000 }, uLineW: { value: 1.5 }, uHatch: { value: 1 }, uTone: { value: .4 },
-        uAlpha: { value: 1 }, uInkOn: { value: 1 }, uFogCol: { value: new THREE.Color(AP.paper) }, uInk: { value: new THREE.Color(AP.graphite) }, uPaperLt: { value: new THREE.Color(AP.paperLt) } } });
+        uAlpha: { value: 1 }, uInkOn: { value: 1 }, uWarm: { value: 1 }, uMask: { value: 0 }, uFogCol: { value: new THREE.Color(AP.paper) }, uInk: { value: new THREE.Color(AP.graphite) }, uPaperLt: { value: new THREE.Color(AP.paperLt) } } });
     POSTSCENE = new THREE.Scene(); POSTCAM = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     POSTSCENE.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), POST));
   }
@@ -184,7 +190,8 @@ const P3 = (() => {
   }
   // albedo twin: same colour, no light, for the local-colour pass
   function twin(m) {
-    let t = albedoCache.get(m); if (t) return t;
+    let t = albedoCache.get(m);
+    if (t) { if (!m.map && m.userData.albedo) t.color.copy(m.userData.albedo); t.opacity = m.userData.style ?? 1; return t; }   // follow colour changes
     const THREE = T3(), src = m.userData.albedo || m.color || new THREE.Color(1, 1, 1);
     t = new THREE.MeshBasicMaterial({ color: m.map ? new THREE.Color(1, 1, 1) : (src.clone ? src.clone() : new THREE.Color(src)), side: m.side, map: m.map || null, vertexColors: !!m.vertexColors,
       transparent: true, opacity: m.userData.style ?? 1, blending: THREE.NoBlending });
@@ -212,9 +219,15 @@ const P3 = (() => {
     U.uBoil.value = BOILN % 997; U.uNear.value = c.near; U.uFar.value = c.far;
     U.uFogN.value = (o.fog || [250, 2500])[0]; U.uFogF.value = (o.fog || [250, 2500])[1];
     U.uFogCol.value.set(o.fogCol || AP.paper); U.uInk.value.set(o.ink || AP.graphite); U.uLineW.value = o.lineW ?? 1.5;
-    U.uHatch.value = o.hatch ?? 1; U.uTone.value = o.tone ?? .4; U.uAlpha.value = o.alpha ?? 1; U.uInkOn.value = o.lines === false ? 0 : 1; U.uHand.value = o.hand ?? -1.05;
+    U.uHatch.value = o.hatch ?? 1; U.uTone.value = o.tone ?? .4; U.uAlpha.value = o.alpha ?? 1; U.uInkOn.value = o.lines === false ? 0 : 1; U.uWarm.value = o.lightTint ?? .55; U.uHand.value = o.hand ?? -1.05;
+    X.save(); X.setTransform(1, 0, 0, 1, 0, 0); X.globalAlpha = 1;
+    if (o.clear !== false) {
+      U.uMask.value = 1; R.setRenderTarget(null); R.setClearColor(0x000000, 0); R.clear(); R.render(POSTSCENE, POSTCAM);
+      X.globalCompositeOperation = 'destination-out'; X.drawImage(R.domElement, 0, 0); X.globalCompositeOperation = 'source-over';
+      U.uMask.value = 0;
+    }
     R.setRenderTarget(null); R.setClearColor(0x000000, 0); R.clear(); R.render(POSTSCENE, POSTCAM);
-    X.save(); X.setTransform(1, 0, 0, 1, 0, 0); X.globalAlpha = 1; X.drawImage(R.domElement, 0, 0); X.restore();
+    X.drawImage(R.domElement, 0, 0); X.restore();
   }
   // ---------- geometry helpers ----------
   function box(w, h, d) { return new (T3().BoxGeometry)(w, h, d); }

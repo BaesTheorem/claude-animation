@@ -12,6 +12,8 @@
 //   WORLD.section(o)                  the cutaway diagram of the earth under the bore (1 unit = 10 ft); see below
 //   WORLD.STRATA                      [top ft, bottom ft, colour, name] of the section, surface to the aquifer
 //   WORLD.depthBoard(o)               the chalked depth board (a lettered plate); board.userData.set(ft) re-chalks it
+//   WORLD.stationSet(o)               THE opening/closing place (waterhole, coolibah, windmill, homestead, fence, bones);
+//                                     .userData.setWet(0..1), .setSpin(angle), .at anchors. Chapters A and H share it.
 const WORLD = (() => {
   const T = () => THREE;
   const H1 = i => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
@@ -210,5 +212,43 @@ const WORLD = (() => {
     }, Math.round(ft));
     b.userData.set(o.ft ?? 0); return b;
   }
-  return { depthBoard, terrain, heightAt, tree, trees, homestead, windmill, cracks, water, waterhole, section, STRATA, VS, noise2 };
+  // The station paddock: the film's first and last frame. The dry waterhole below the dead coolibah, the stock
+  // windmill, the homestead beyond, a fence line and a cattle skeleton. o.wet 0..1 fills the waterhole, greens the
+  // ground and leafs the coolibah; set per frame with st.userData.setWet(k) and st.userData.setSpin(angle).
+  // Anchors (st.userData.at): hole [x,z] (waterhole centre), tree, mill, house, skull. Chapters A and H share it.
+  function stationSet(o = {}) {
+    const THREE = T(), g = new THREE.Group(), at = { hole: [0, 0], tree: [-19, -6], mill: [16, -34], house: [-52, -120], skull: [21, 11] };
+    const ground = terrain({ col: o.col || '#CDAE80', flat: 40, amp: 5 }); g.add(ground);
+    const wh = waterhole(at.hole[0], at.hole[1], 16, { fill: 0 }); g.add(wh);
+    const dead = tree(at.tree[0], at.tree[1], { dead: true, h: 30, seed: 5 }); g.add(dead);
+    const live = tree(at.tree[0], at.tree[1], { dead: false, h: 30, seed: 5, leaf: '#6E8A4A' }); live.visible = false; g.add(live);
+    const mill = windmill({ pos: [at.mill[0], 0, at.mill[1]], yaw: -.4 }); g.add(mill);
+    const house = homestead({ pos: [at.house[0], 0, at.house[1]], yaw: .35 }); g.add(house);
+    // fence: posts and three wires running off toward the house
+    for (let i = 0; i < 16; i++) { const x = 30 - i * 6.5, z = 18 - i * 9; const post = P3.mesh(P3.box(.35, 4.2, .35), '#6E5A44'); post.position.set(x, 2.1, z); post.rotation.z = (H1(i) - .5) * .12; g.add(post); }
+    for (const yy of [1.4, 2.5, 3.6]) { const wire = P3.beam([30, yy, 18], [30 - 15 * 6.5, yy, 18 - 15 * 9], .05, .05, '#5A5650'); wire.castShadow = false; g.add(wire); }
+    // a cattle skeleton: skull, curve of ribs, scattered long bones
+    const bone = '#E8DFC8', sk = new THREE.Group(); sk.position.set(at.skull[0], 0, at.skull[1]); sk.rotation.y = .6; g.add(sk);
+    const cr = P3.mesh(new THREE.SphereGeometry(.9, 12, 8), bone); cr.scale.set(1, .7, 1.5); cr.position.set(0, .45, 0); sk.add(cr);
+    for (const sd of [-1, 1]) { const hn = P3.mesh(P3.cyl(.05, .2, 1.6, 8), bone); hn.position.set(sd * .9, .7, -.3); hn.rotation.z = -sd * 1.1; sk.add(hn); }
+    for (let i = 0; i < 9; i++) { const rb = P3.mesh(new THREE.TorusGeometry(1.6 - Math.abs(i - 4) * .12, .07, 5, 12, Math.PI), bone); rb.position.set(-3 - i * .55, .02, .5); rb.rotation.set(-Math.PI / 2 + .35, .25, 0); sk.add(rb); }
+    for (let i = 0; i < 4; i++) { const lb = P3.mesh(P3.cyl(.1, .12, 2.4, 6), bone); lb.position.set(-2 + i * 1.8, .1, 2 + (H1(i) - .5) * 2); lb.rotation.set(Math.PI / 2, 0, H1(i * 3) * 3); sk.add(lb); }
+    // green shoots that come up with the water (hidden while dry)
+    const shoots = new THREE.Group(); g.add(shoots);
+    for (let i = 0; i < 220; i++) {   // tufts: a few blades fanned from one root
+      const a = H1(i * 3.7) * TAU, r = 17.5 + H1(i * 5.1) * 70, tuft = new THREE.Group(); tuft.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+      for (let k = 0; k < 4; k++) { const bl = P3.mesh(new THREE.ConeGeometry(.12, .9 + H1(i + k) * 1.1, 3), k % 2 ? '#8FB25A' : '#A6C06A', { cast: false }); bl.position.y = .5; bl.rotation.set((H1(i * 7 + k) - .5) * .9, k * 1.6, (H1(i * 11 + k) - .5) * .9); tuft.add(bl); }
+      shoots.add(tuft);
+    }
+    g.userData = { at, ground, wh, dead, live, mill, house, shoots,
+      setWet(k) {
+        k = clamp(k); const w = wh.userData.water; w.visible = k > .01; w.scale.setScalar(Math.max(.01, k));
+        dead.visible = k < .5; live.visible = k >= .5; shoots.visible = k > .3; shoots.scale.set(1, clamp((k - .3) / .7), 1);
+        ground.material.color.set(mixCol(o.col || '#CDAE80', '#9DAA66', k * .75)); ground.material.userData.albedo.copy(ground.material.color);
+      },
+      setSpin(a) { mill.userData.wheel.rotation.z = a; } };
+    g.userData.setWet(o.wet ?? 0);
+    return g;
+  }
+  return { stationSet, depthBoard, terrain, heightAt, tree, trees, homestead, windmill, cracks, water, waterhole, section, STRATA, VS, noise2 };
 })();

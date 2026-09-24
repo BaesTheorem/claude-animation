@@ -116,7 +116,7 @@
       o.scene.add(WORLD.terrain({ col: '#8A7A62' }));
       const R = RIG.build(); o.scene.add(R);
       for (const [x, z, h] of [[-120, -300, 58], [160, -380, 64], [-300, -520, 60], [320, -600, 66]]) { const d = RIG.build({ derrick: h }); d.position.set(x, 0, z); o.scene.add(d); }
-      const lamp = P3.lamp(o, [2.5, 9.5, 5], '#FFB45A', 160, 60);
+      const lamp = P3.lamp(o, [2.5, 9.5, 5], '#FFB45A', 2600, 90);
       const a = PEOPLE.make('dresser'), b = PEOPLE.make('driller'), c = PEOPLE.make('lab');
       for (const p of [a, b, c]) o.scene.add(p.root);
       S = { o, R, a, b, c, lamp, cam: P3.cam(46) };
@@ -129,7 +129,7 @@
     PEOPLE.at(a, [-3.2, fy, 2.2], .9 + hv); PEOPLE.clip(a, 'Push_Loop', t); PEOPLE.reach(a, 'r', [-1.2, fy + 3.1, 2.4], [-3, fy + 2, 4]); PEOPLE.reach(a, 'l', [-1.8, fy + 3.1, 3.0], [-4, fy + 2, 3]);
     PEOPLE.at(b, [3.6, fy, 2.6], -.8); PEOPLE.clip(b, 'Push_Loop', t + .4); PEOPLE.reach(b, 'l', [1.4, fy + 3.3, 2.6], [3, fy + 2, 4.5]); PEOPLE.reach(b, 'r', [2.2, fy + 3.3, 3.2], [4, fy + 2, 3]);
     PEOPLE.at(c, [.8, fy, 4.2], Math.PI + .1); PEOPLE.clip(c, 'Push_Loop', t + .8); PEOPLE.reach(c, 'l', [.3, fy + 3, 2.4], [0, fy + 2, 5]); PEOPLE.reach(c, 'r', [1.1, fy + 3, 2.6], [2, fy + 2, 5]);
-    sky('#1F3A44', '#2F6B6E', { still: true });
+    sky('#1F3A44', '#2F6B6E', { still: true, hatch: .35 });
     P3.look(S.cam, [1.5, fy + 1.2, 16], [0, fy + 7.5, 0]);
     P3.draw(S.o, S.cam, { fog: [120, 900], fogCol: '#2F5A60', ink: '#1C1A18' });
     const [lx, ly] = P3.project(S.cam, [2.5, 9.5, 5]); pglow(lx, ly, 260, '#FFB45A', .8);
@@ -153,4 +153,15 @@
     P3.draw(S.o, S.cam, { fog: [200, 2000], fogCol: '#E4D5B7', near: 1, far: 4000 });
   };
   LOOPS.cut3.len = 6;
+})();
+
+(() => {
+  LOOPS.station = t => {
+    const S = P3.cached('test-station', () => { const o = P3.scene({ sunDir: [-80, 40, 30], shadowSize: 150 }); const st = WORLD.stationSet({}); o.scene.add(st); WORLD.trees(o.scene, 40, { r0: 150, r1: 1200, dead: .7 }); return { o, st, cam: P3.cam(40) }; });
+    const wet = t > 2 ? 1 : 0; S.st.userData.setWet(wet); S.st.userData.setSpin(t * 3 * wet);
+    sky(wet ? '#A9C7D6' : '#E9C27E', wet ? '#F2E2B8' : '#F3DDB0', { still: true }); sun(1400, 170, 60, wet ? .2 : .8);
+    P3.look(S.cam, [26, 7, 42], [-6, 5, -6]);
+    P3.draw(S.o, S.cam, { fog: [140, 1400], fogCol: wet ? '#EFE4C4' : '#F2D8A8' });
+  };
+  LOOPS.station.len = 4;
 })();
