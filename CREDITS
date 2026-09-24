@@ -1,0 +1,3 @@
+Music (video/butterfly): first 18 s of "Carefree" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License. http://creativecommons.org/licenses/by/4.0/
+The audio file itself is not committed: fetch https://incompetech.com/music/royalty-free/mp3-royaltyfree/Carefree.mp3 into assets/ and trim with
+  ffmpeg -i assets/Carefree.mp3 -t 18 -af "afade=t=out:st=16.3:d=1.7" assets/carefree_18.mp3
