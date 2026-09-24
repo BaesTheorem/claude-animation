@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Clawd studio</title>
+<title>Artesian Water studio</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Permanent+Marker&display=block">
 <style>
   html, body { margin: 0; background: #1b1820; color: #eee; font: 13px system-ui, sans-serif; }
@@ -23,13 +23,25 @@
 </main>
 <!-- engine -->
 <script src="src/config.js"></script>
+<script src="src/lyrics.js"></script>
 <script src="src/core.js"></script>
 <script src="src/clawd.js"></script>
 <script src="src/timeline.js"></script>
 <!-- reference sheets (standalone loops) -->
 <script src="src/sheets.js"></script>
 <!-- your video: add a script per scene file, in order -->
-<script src="src/scenes/demo.js"></script>
+<script src="src/artesian/lib.js"></script>
+<script src="src/artesian/rig.js"></script>
+<script src="src/artesian/set.js"></script>
+<script src="src/artesian/chA.js"></script>
+<script src="src/artesian/chB.js"></script>
+<script src="src/artesian/chC.js"></script>
+<script src="src/artesian/chD.js"></script>
+<script src="src/artesian/chE.js"></script>
+<script src="src/artesian/chF.js"></script>
+<script src="src/artesian/chG.js"></script>
+<script src="src/artesian/chH.js"></script>
+<script src="src/artesian/test.js"></script>
 <script>
   // Open studio.html?loop=emotions (or views) to scrub a standalone loop instead of the video.
   const q = new URLSearchParams(location.search).get('loop'); if (q && LOOPS[q]) window.LOOP = LOOPS[q];
