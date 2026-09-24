@@ -165,3 +165,60 @@
   };
   LOOPS.station.len = 4;
 })();
+(() => {
+  LOOPS.heavy = t => {
+    const S = P3.cached('test-heavy', () => {
+      const o = P3.scene({ sunDir: [-70, 50, 40], shadowSize: 120 });
+      o.scene.add(WORLD.terrain({})); WORLD.trees(o.scene, 60, { r0: 90, r1: 1200, dead: .6 });
+      const R = RIG.build(); o.scene.add(R);
+      const ppl = Object.keys(CAST3).map(n => { const p = PEOPLE.make(n); o.scene.add(p.root); return p; });
+      const cows = Array.from({ length: 20 }, (_, i) => { const c = PEOPLE.beast(i % 3 ? 'cow' : 'bull', ['#8A4A2E', '#6E5A48', '#A0703E'][i % 3]); o.scene.add(c.root); return c; });
+      return { o, R, ppl, cows, cam: P3.cam(40) };
+    });
+    RIG.pose(S.R, { stroke: RIG.strokeAt(t), amp: 1, fly: t * 6 });
+    S.ppl.forEach((p, i) => { PEOPLE.at(p, [-10 + i * 4, 0, 18 + (i % 2) * 3], .4); PEOPLE.clip(p, 'Walk_Loop', t + i * .3); });
+    S.cows.forEach((c, i) => { PEOPLE.at(c, [40 + (i % 5) * 9, 0, 30 + Math.floor(i / 5) * 8], -1.4); PEOPLE.clip(c, 'Walk', t + i * .2); });
+    sky('#E7B870', '#F2D9A8', { still: true });
+    P3.look(S.cam, [30, 12, 80], [10, 8, 10]);
+    P3.draw(S.o, S.cam, { fog: [150, 1300], fogCol: '#F2D9A8' });
+  };
+  LOOPS.heavy.len = 3;
+})();
+(() => {
+  LOOPS.forge = t => {
+    const S = P3.cached('test-forge', () => {
+      const o = P3.scene({ sunDir: [-40, 30, 60], sun: 1.2, fill: .35, shadowSize: 40 });
+      o.scene.add(WORLD.terrain({})); const R = RIG.build(); o.scene.add(R); RIG.pose(R, { stroke: 0, amp: 0 });
+      const dz = PEOPLE.make('dresser'), hd = PEOPLE.make('hand'); o.scene.add(dz.root); o.scene.add(hd.root);
+      const sl = PROPS.sledge(), tg = PROPS.tongs(), bit = PROPS.bitIron(); o.scene.add(sl); o.scene.add(tg); o.scene.add(bit);
+      const fl = P3.lamp(o, [-29, 5, 7.5], '#FF8A3A', 1800, 60);
+      return { o, R, dz, hd, sl, tg, bit, cam: P3.cam(35) };
+    });
+    const U = S.R.userData, an = U.anvil;   // [x,y,z] top of anvil
+    // dresser: a true two-handed stroke landing on the bit on the anvil every two beats
+    const tgt = [an[0] - .1, an[1] + .35, an[2] + .1], yaw = -Math.PI / 2 - .1, st = PROPS.swingStand(S.dz, tgt, yaw);
+    PEOPLE.at(S.dz, st, yaw); PEOPLE.clip(S.dz, 'Idle_Loop', t);
+    PROPS.swing(S.dz, S.sl, frac(t / 1.07), { target: tgt });
+    // the hand holds the bit on the anvil with tongs
+    PEOPLE.at(S.hd, [an[0] - 2.4, 0, an[2] - 1.2], Math.PI / 2 + .5); PEOPLE.clip(S.hd, 'Idle_Loop', t + 1.3);
+    PROPS.at(S.bit, [an[0] - .2, an[1] + .15, an[2] + .1], [0, 0, -Math.PI / 2]);
+    PEOPLE.reach(S.hd, 'r', [an[0] - 1.2, an[1] + .4, an[2] - .3], [an[0] - 2, an[1] - 1, an[2] - 2]);
+    PROPS.place(S.tg, PEOPLE.hand(S.hd, 'r'), [an[0] + .4, an[1] + .2, an[2] + .1]);
+    sky('#8E5A3E', '#D8A070', { still: true, hatch: .4 });
+    P3.look(S.cam, [an[0] + 2, 5.2, an[2] + 11], [an[0], 3.6, an[2]]);
+    P3.draw(S.o, S.cam, { fog: [60, 600], fogCol: '#D8A070', lightTint: .8 });
+    const [fx, fy] = P3.project(S.cam, U.forge); pglow(fx, fy, 180, '#FF8A3A', 1);
+  };
+  LOOPS.forge.len = 3;
+})();
+
+(() => {
+  LOOPS.site = t => {
+    const S = P3.cached('test-site', () => { const o = P3.scene({ sunDir: [-70, 45, 60], shadowSize: 140 }); const st = WORLD.site({ board: 1240 }); o.scene.add(st.group); return { o, st, cam: P3.cam(42) }; });
+    RIG.pose(S.st.rig, { stroke: RIG.strokeAt(t), amp: 1, fly: t * 6 });
+    sky('#E7B870', '#F2D9A8', { still: true }); sun(1600, 150, 55, .4);
+    P3.look(S.cam, [-95, 34, 120], [-10, 8, 10]);
+    P3.draw(S.o, S.cam, { fog: [160, 1400], fogCol: '#F2D9A8' });
+  };
+  LOOPS.site.len = 3;
+})();

@@ -127,8 +127,8 @@ const P3 = (() => {
         float sc = uHatch * (ground ? 0.5 : skin ? 0.4 : 0.6);
         vec3 shadowCol = mix(a * 0.5, vec3(0.16, 0.17, 0.3), 0.35);
         // burnished tone of the local colour, then the pencil layers over it
-        vec3 col = a; float cov = uTone * (0.35 + 0.65 * L) * (0.7 + 0.3 * tooth);
-        float c1 = hatch(tTam, px, a1, clamp(0.12 + 0.5 * L + 0.4 * T, 0.0, 0.95), sc, 1.0);
+        vec3 col = a; float cov = uTone * (0.35 + 0.65 * L) * (0.7 + 0.3 * tooth) * (ground ? 0.8 : 1.0);
+        float c1 = hatch(tTam, px, a1, clamp(0.12 + 0.5 * L + 0.4 * T, 0.0, 0.95) * (ground ? 0.62 : 1.0), sc, 1.0);
         col = mix(col, a * 0.9, c1); cov = max(cov, c1 * (0.7 + 0.3 * tooth));
         float c2 = hatch(tTam2, px, a1 + 1.1, smoothstep(0.35, 0.95, T) * 0.9, sc, 2.0);
         col = mix(col, shadowCol, c2 * 0.85); cov = max(cov, c2 * 0.85);

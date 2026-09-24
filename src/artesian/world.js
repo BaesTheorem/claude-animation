@@ -12,6 +12,7 @@
 //   WORLD.section(o)                  the cutaway diagram of the earth under the bore (1 unit = 10 ft); see below
 //   WORLD.STRATA                      [top ft, bottom ft, colour, name] of the section, surface to the aquifer
 //   WORLD.depthBoard(o)               the chalked depth board (a lettered plate); board.userData.set(ft) re-chalks it
+//   WORLD.site(o)                     the bore site, same layout in every chapter: { group, rig, board, ground, at }
 //   WORLD.stationSet(o)               THE opening/closing place (waterhole, coolibah, windmill, homestead, fence, bones);
 //                                     .userData.setWet(0..1), .setSpin(angle), .at anchors. Chapters A and H share it.
 const WORLD = (() => {
@@ -250,5 +251,36 @@ const WORLD = (() => {
     g.userData.setWet(o.wet ?? 0);
     return g;
   }
-  return { stationSet, depthBoard, terrain, heightAt, tree, trees, homestead, windmill, cracks, water, waterhole, section, STRATA, VS, noise2 };
+  // The bore site, laid out the same in every chapter: the plant (RIG) at the origin with the beam and engine along +x
+  // and the forge shed to -x, the crew's camp (tents, fire, cart, barrels) out along +z/-x, the depth board on the
+  // derrick's front-left leg, scrub around. Returns { group, rig, board, at } where at holds anchors: camp, fire,
+  // cart, tents[], boardPos. o.col (ground colour), o.dead (fraction of dead trees), o.trees (count), o.board (ft).
+  function site(o = {}) {
+    const THREE = T(), g = new THREE.Group();
+    const ground = terrain({ col: o.col || '#C9A77A', flat: 150 }); g.add(ground);
+    const rig = RIG.build(); g.add(rig);
+    const at = { camp: [-42, 0, 46], fire: [-36, 0, 38], cart: [-58, 0, 30], tents: [[-50, 0, 52], [-38, 0, 60], [-60, 0, 44]] };
+    for (const [x, y, z] of at.tents) {   // A-frame canvas tents: ridge pole, two sloped flies, an open end
+      const t = new THREE.Group(); t.position.set(x, 0, z); t.rotation.y = H1(x) * 1.2; g.add(t);
+      for (const sd of [-1, 1]) { const fl = P3.mesh(P3.box(.1, 6.4, 10), '#DCCFB4', { side: THREE.DoubleSide }); fl.position.set(sd * 2.1, 2.5, 0); fl.rotation.z = sd * .72; t.add(fl); }
+      const ridge = P3.mesh(P3.cyl(.08, .08, 11, 6).rotateX(Math.PI / 2), '#6E5238'); ridge.position.y = 5.1; t.add(ridge);
+      for (const zz of [-5.3, 5.3]) { const pole = P3.mesh(P3.cyl(.07, .07, 5.2, 6), '#6E5238'); pole.position.set(0, 2.6, zz); t.add(pole); }
+    }
+    const ring = new THREE.Group(); ring.position.set(...at.fire); g.add(ring);
+    for (let i = 0; i < 9; i++) { const st = P3.mesh(new THREE.IcosahedronGeometry(.45, 0), '#8A8074'); const a = i / 9 * TAU; st.position.set(Math.cos(a) * 1.6, .25, Math.sin(a) * 1.6); ring.add(st); }
+    const billy = P3.mesh(P3.cyl(.35, .35, .7, 10), '#6E6A64'); billy.position.set(at.fire[0] + .3, 1.1, at.fire[2]); g.add(billy);
+    g.add(P3.beam([at.fire[0] - 1.5, 1.8, at.fire[2]], [at.fire[0] + 1.8, 1.8, at.fire[2]], .12, .12, '#4A4744'));
+    const cart = new THREE.Group(); cart.position.set(...at.cart); cart.rotation.y = .8; g.add(cart);
+    const bed = P3.mesh(P3.box(6, .5, 11), '#8A6A48'); bed.position.y = 3.2; cart.add(bed);
+    for (const sd of [-1, 1]) { const side = P3.mesh(P3.box(.3, 1.4, 11), '#7A5A40'); side.position.set(sd * 3, 4.1, 0); cart.add(side);
+      const wh = P3.mesh(new THREE.TorusGeometry(2.4, .2, 6, 28), '#5A4636'); wh.position.set(sd * 3.4, 2.4, 1); wh.rotation.y = Math.PI / 2; cart.add(wh);
+      for (let k = 0; k < 6; k++) { const sp = P3.mesh(P3.box(.12, 4.8, .12), '#5A4636'); sp.position.set(sd * 3.4, 2.4, 1); sp.rotation.x = k / 6 * Math.PI; cart.add(sp); } }
+    const shafts = P3.beam([-1.2, 3.2, -5.5], [-1.4, .4, -13], .3, .3, '#7A5A40'); cart.add(shafts); const shafts2 = P3.beam([1.2, 3.2, -5.5], [1.4, .4, -13], .3, .3, '#7A5A40'); cart.add(shafts2);
+    for (const [x, z] of [[-30, 50], [-28.5, 51.5], [-31, 52.8]]) { const br = P3.mesh(P3.cyl(1.1, 1.1, 3, 14), '#6E5238'); br.position.set(x, 1.5, z); g.add(br); }
+    // depth board on the derrick's front-left leg, facing the camp
+    const board = depthBoard({ ft: o.board ?? 0 }); board.position.set(-7.6, 7.4, 8.2); board.rotation.y = .5; g.add(board); at.boardPos = [-7.6, 7.4, 8.2];
+    trees(g, o.trees ?? 70, { r0: 110, r1: 1300, dead: o.dead ?? .6, seed: 11 });
+    return { group: g, rig, board, ground, at };
+  }
+  return { site, stationSet, depthBoard, terrain, heightAt, tree, trees, homestead, windmill, cracks, water, waterhole, section, STRATA, VS, noise2 };
 })();
