@@ -96,3 +96,11 @@ Serious reading of the "devil" verse: deeper means hotter and harder; defiance, 
 
 ## Seams
 Chapter boundaries are `scribbleWipe` (outgoing chapter p 0 → .5 in its last .35 s, incoming p .5 → 1 in its first .35 s), except F → G (the whistle's steam fills the frame on "Hark!") and the end of H (the drawing lifts off the page).
+
+## Continuity (all chapters)
+- **The site** is `WORLD.site()`: the derrick over the bore at the origin; the walking beam runs along +x to the band wheel (x ≈ 31) and the portable engine (x ≈ 46, firebox toward the derrick); the bull wheel at (6, -12); the sand reel at (-9, -11); the forge shed at (-26, 10) with the anvil and quench tub; the rod rack along x ≈ -20; the camp (tents, fire ring, cart, water barrels) around (-42, 46); the depth board on the derrick's front-left leg. Keep this geography; cut with it in mind (screen direction).
+- **The station** is `WORLD.stationSet()`, somewhere else on the run: waterhole, coolibah, windmill, homestead, fence, bones. Chapters A, E, H.
+- **Crew stations while drilling:** the driller on the derrick floor at the temper screw/tiller (about (2, floor, 1.5)); Bill at the engine's firebox and throttle; the dresser at the forge or on the floor; the hand at the bull wheel or sand reel/bailer; the labourer with rods, casing and wood; the boss by the depth board with the log book.
+- **Sun and time:** A dawn → morning (low east sun, long shadows), B afternoon, C late afternoon gold (low west), D night (lanterns, firebox, a thin moon), E blinding noon, F storm dusk (low west under cloud), G dawn (low east, gold, then blue), H late afternoon into sunset. Pick the sun direction once per chapter and keep it.
+- **Depth board and section depth:** A 0 → 600 ft; B ~1000 → 1400; C ~1400 → 2100; D ~2150 → 2700; E ~2800 → 3500 (3000 on line [38]); F ~3600 → 4020; G the strike at 4020; H the flowing bore.
+- **Costume:** constant. Faces and shirts get grimier from B on (use slightly darker shirt colours via `PEOPLE.make(name, { shirt: ... })` if you like, the same in every shot of your chapter). Hats come off only in G (thrown) and H.
