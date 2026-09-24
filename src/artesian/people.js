@@ -62,7 +62,7 @@ const PEOPLE = (() => {
     hat.castShadow = hat.receiveShadow = true;
     // rest pose: the crown sits on the skull, level, a little back
     const hw = new THREE.Vector3(); head.getWorldPosition(hw);
-    const lift = kind === 'wide' ? .148 : .122, sc = kind === 'wide' ? 1.08 : 1.04;
+    const fem = /woman/.test(root.userData.model || ''), lift = (kind === 'wide' ? .148 : .122) + (fem ? .035 : 0), sc = (kind === 'wide' ? 1.08 : 1.04) * (fem ? 1.16 : 1);
     const want = new THREE.Matrix4().compose(new THREE.Vector3(hw.x, hw.y + lift, hw.z - .012), new THREE.Quaternion().setFromEuler(new THREE.Euler(-.1 + tilt, 0, 0)), new THREE.Vector3(sc, sc, sc));
     const inv = head.matrixWorld.clone().invert(); hat.applyMatrix4(inv.multiply(want));
     head.add(hat); return hat;
@@ -81,9 +81,13 @@ const PEOPLE = (() => {
         o.material = P3.mat(col, { style: role === 'skin' ? .9 : role === 'eyes' ? .7 : 1 });
       }
     });
-    // build: widen / narrow the frame (applied to the rest pose; clips only rotate)
-    const rest = {}; for (const [k, b] of Object.entries(bones)) rest[k] = { q: b.quaternion.clone(), p: b.position.clone(), s: b.scale.clone() };
-    const p = { root, bones, rest, L, name, hat: null };
+    root.userData.model = L.model;
+    // build: broaden or narrow the frame on the rest pose (clips only rotate bones, so this survives animation)
+    const bw = L.build ?? 1;
+    if (bw !== 1 && bones.spine_02) bones.spine_02.scale.set(bw, 1, bw);      // everything above inherits it (chest, arms)
+    if (bw !== 1 && bones.neck_01) bones.neck_01.scale.set(1 / bw, 1, 1 / bw);
+    const p = { root, bones, rest: null, L, name, hat: null };
+    p.rest = {}; for (const [k, b] of Object.entries(bones)) p.rest[k] = { q: b.quaternion.clone(), p: b.position.clone(), s: b.scale.clone() };
     if (L.hat) p.hat = attachHat(root, L.hat, L.hatCol || '#5B4A3A', L.hatTilt || 0);
     root.scale.setScalar(M2FT * (L.height || 1));
     return p;
@@ -143,17 +147,17 @@ const PEOPLE = (() => {
 // hat = slouch | wide | bowler | cap. Keep everyone on model by always making them through PEOPLE.make(name).
 const CAST3 = {
   // the tool dresser: the crew's mechanic and blacksmith, the John Henry of the piece
-  dresser: { model: 'man_beard', skin: '#8A5A3C', shirt: '#E4DAC4', trousers: '#3E5C86', boots: '#3A2A20', hair: '#241E1A', beard: '#241E1A', brows: '#241E1A', eyes: '#2A2320', hat: 'slouch', hatCol: '#4E4034', height: 1.04 },
+  dresser: { model: 'man_beard', skin: '#8A5A3C', shirt: '#E4DAC4', trousers: '#3E5C86', boots: '#3A2A20', hair: '#241E1A', beard: '#241E1A', brows: '#241E1A', eyes: '#2A2320', hat: 'slouch', hatCol: '#4E4034', height: 1.04, build: 1.12 },
   // the driller: in charge of the hole, hand on the rods; a woman
-  driller: { model: 'woman_trousers', skin: '#C99272', shirt: '#8A6E52', belt: '#4A3626', trousers: '#5A5046', boots: '#3A2A20', hair: '#3A2A20', brows: '#3A2A20', eyes: '#2A2320', hat: 'wide', hatCol: '#7A6448' },
+  driller: { model: 'woman_trousers', skin: '#C99272', shirt: '#8A6E52', belt: '#4A3626', trousers: '#5A5046', boots: '#3A2A20', hair: '#3A2A20', brows: '#3A2A20', eyes: '#2A2320', hat: 'wide', hatCol: '#7A6448', height: .96 },
   // Canadian Bill: engine driver and fireman
-  bill: { model: 'man_ranger', skin: '#D39A72', shirt: '#A8392C', belt: '#3A2A20', trousers: '#4E473F', boots: '#3A2A20', hair: '#9A4A26', beard: '#9A4A26', brows: '#9A4A26', eyes: '#2A2320', hat: 'cap', hatCol: '#2F3E52', height: 1.03 },
+  bill: { model: 'man_ranger', skin: '#D39A72', shirt: '#A8392C', belt: '#3A2A20', trousers: '#4E473F', boots: '#3A2A20', hair: '#9A4A26', beard: '#9A4A26', brows: '#9A4A26', eyes: '#2A2320', hat: 'cap', hatCol: '#2F3E52', height: 1.05, build: .93 },
   // the boss: the contractor
-  boss: { model: 'man', skin: '#D8A07A', shirt: '#EDE3CF', trousers: '#4E4A48', boots: '#2A2220', hair: '#8A8078', brows: '#8A8078', eyes: '#2A2320', hat: 'bowler', hatCol: '#2E2A28' },
+  boss: { model: 'man', skin: '#D8A07A', shirt: '#EDE3CF', trousers: '#4E4A48', boots: '#2A2220', hair: '#8A8078', brows: '#8A8078', eyes: '#2A2320', hat: 'bowler', hatCol: '#2E2A28', build: 1.1, height: .97 },
   // the crew's second woman: labourer on the bull wheel and the bailer
-  hand: { model: 'woman', skin: '#B97E58', shirt: '#6E7E8C', trousers: '#4A4238', boots: '#3A2A20', hair: '#2A221C', brows: '#2A221C', eyes: '#2A2320', hat: 'slouch', hatCol: '#6A5A44' },
+  hand: { model: 'woman', skin: '#B97E58', shirt: '#6E7E8C', trousers: '#4A4238', boots: '#3A2A20', hair: '#2A221C', brows: '#2A221C', eyes: '#2A2320', hat: 'slouch', hatCol: '#6A5A44', height: .95 },
   // a labourer
   lab: { model: 'man', skin: '#C48A60', shirt: '#B98A52', trousers: '#3A4A5E', boots: '#3A2A20', hair: '#4A3A2E', brows: '#4A3A2E', eyes: '#2A2320', hat: 'slouch', hatCol: '#8A6A44' },
   // the squatter: the station owner
-  squatter: { model: 'man_beard', skin: '#D3A07E', shirt: '#F0E8D8', trousers: '#7A6A52', boots: '#5A3E28', hair: '#B8B2A8', beard: '#B8B2A8', brows: '#B8B2A8', eyes: '#2A2320', hat: 'wide', hatCol: '#C9B48A' },
+  squatter: { model: 'man_beard', skin: '#D3A07E', shirt: '#F0E8D8', trousers: '#7A6A52', boots: '#5A3E28', hair: '#B8B2A8', beard: '#B8B2A8', brows: '#B8B2A8', eyes: '#2A2320', hat: 'wide', hatCol: '#C9B48A', build: .92, height: 1.01 },
 };

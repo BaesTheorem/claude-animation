@@ -107,3 +107,50 @@
   };
   LOOPS.rig3.len = 4;
 })();
+(() => {
+  let S = null;
+  LOOPS.night3 = t => {
+    if (!S) {
+      const o = P3.scene({ sunDir: [40, 30, -60], sun: .35, fill: .25, shadowSize: 60 });
+      o.sun.color.set('#7FA6B8'); o.fill.color.set('#5A7E8C'); o.fill.groundColor.set('#1E2A30');
+      o.scene.add(WORLD.terrain({ col: '#8A7A62' }));
+      const R = RIG.build(); o.scene.add(R);
+      for (const [x, z, h] of [[-120, -300, 58], [160, -380, 64], [-300, -520, 60], [320, -600, 66]]) { const d = RIG.build({ derrick: h }); d.position.set(x, 0, z); o.scene.add(d); }
+      const lamp = P3.lamp(o, [2.5, 9.5, 5], '#FFB45A', 160, 60);
+      const a = PEOPLE.make('dresser'), b = PEOPLE.make('driller'), c = PEOPLE.make('lab');
+      for (const p of [a, b, c]) o.scene.add(p.root);
+      S = { o, R, a, b, c, lamp, cam: P3.cam(46) };
+    }
+    const { R, a, b, c } = S, U = R.userData;
+    RIG.pose(R, { stroke: 0, amp: 0, fly: 0 });
+    const fy = U.floorY, grip = [0, fy + 3.2, 0];
+    // three hands on two tongs clamped to the casing, heaving round
+    const hv = Math.sin(t * 2.2) * .15;
+    PEOPLE.at(a, [-3.2, fy, 2.2], .9 + hv); PEOPLE.clip(a, 'Push_Loop', t); PEOPLE.reach(a, 'r', [-1.2, fy + 3.1, 2.4], [-3, fy + 2, 4]); PEOPLE.reach(a, 'l', [-1.8, fy + 3.1, 3.0], [-4, fy + 2, 3]);
+    PEOPLE.at(b, [3.6, fy, 2.6], -.8); PEOPLE.clip(b, 'Push_Loop', t + .4); PEOPLE.reach(b, 'l', [1.4, fy + 3.3, 2.6], [3, fy + 2, 4.5]); PEOPLE.reach(b, 'r', [2.2, fy + 3.3, 3.2], [4, fy + 2, 3]);
+    PEOPLE.at(c, [.8, fy, 4.2], Math.PI + .1); PEOPLE.clip(c, 'Push_Loop', t + .8); PEOPLE.reach(c, 'l', [.3, fy + 3, 2.4], [0, fy + 2, 5]); PEOPLE.reach(c, 'r', [1.1, fy + 3, 2.6], [2, fy + 2, 5]);
+    sky('#1F3A44', '#2F6B6E', { still: true });
+    P3.look(S.cam, [1.5, fy + 1.2, 16], [0, fy + 7.5, 0]);
+    P3.draw(S.o, S.cam, { fog: [120, 900], fogCol: '#2F5A60', ink: '#1C1A18' });
+    const [lx, ly] = P3.project(S.cam, [2.5, 9.5, 5]); pglow(lx, ly, 260, '#FFB45A', .8);
+  };
+  LOOPS.night3.len = 3;
+})();
+(() => {
+  let S = null;
+  LOOPS.cut3 = t => {
+    if (!S) {
+      const o = P3.scene({ sunDir: [-60, 80, 90], shadowSize: 300 });
+      const sec = WORLD.section({ bottom: 4400 }); o.scene.add(sec);
+      const R = RIG.build(); R.scale.setScalar(.35); o.scene.add(R);
+      S = { o, sec, R, cam: P3.cam(36) };
+    }
+    const d = 200 + t * 230, st = RIG.strokeAt(t), yb = S.sec.userData.y(d);
+    S.sec.userData.set(d, st, { casing: Math.min(d, 900) });
+    RIG.pose(S.R, { stroke: st, amp: 1, fly: t * 6 });
+    sky('#E7B870', '#F2D9A8', { still: true });
+    P3.look(S.cam, [38, yb + 22, 118], [0, yb + 4, 0]);
+    P3.draw(S.o, S.cam, { fog: [200, 2000], fogCol: '#E4D5B7', near: 1, far: 4000 });
+  };
+  LOOPS.cut3.len = 6;
+})();

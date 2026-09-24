@@ -9,8 +9,9 @@
 //   WORLD.cracks(cx, cz, r, o)        a crazed dried-mud network as flat dark strokes on the ground
 //   WORLD.waterhole(cx, cz, r, o)     a hollow in the ground; o.fill 0..1 raises a water surface (group.userData.water)
 //   WORLD.water(geom, o)              a water surface mesh (pencil style id .5: cool hatching and glints)
-//   WORLD.strata(o)                   the cutaway block of the earth under the bore for the dive shots (depth in ft)
+//   WORLD.section(o)                  the cutaway diagram of the earth under the bore (1 unit = 10 ft); see below
 //   WORLD.STRATA                      [top ft, bottom ft, colour, name] of the section, surface to the aquifer
+//   WORLD.depthBoard(o)               the chalked depth board (a lettered plate); board.userData.set(ft) re-chalks it
 const WORLD = (() => {
   const T = () => THREE;
   const H1 = i => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
@@ -139,21 +140,75 @@ const WORLD = (() => {
   // The section: surface soil, the Rolling Downs marine mudstones (fossils), harder beds, then the aquifer sandstone.
   const STRATA = [[0, 40, '#9C4A2E', 'red soil'], [40, 380, '#C89A5E', 'clay and gravel'], [380, 1150, '#8E8A7E', 'grey marine mudstone'], [1150, 1500, '#6E6458', 'dark shale (fossil beds)'],
     [1500, 2600, '#7C7A74', 'blue-grey mudstone'], [2600, 3400, '#8C7458', 'sandy shale'], [3400, 4020, '#9A948A', 'hard grey rock'], [4020, 4400, '#5C8FAE', 'water-bearing sandstone']];
-  function strata(o = {}) {
-    // a block W wide, D deep (front face at z = 0) from the surface down to o.bottom ft; the bore runs down the front face
-    const THREE = T(), g = new THREE.Group(), Wd = o.w ?? 260, Dp = o.d ?? 160, bottom = o.bottom ?? 4400;
+  // The cutaway diagram of the earth under the bore, drawn like a period geological section: 1 world unit = 10 ft
+  // (VS = .1), so the whole 4,400 ft column is 440 units tall and a camera 120 units off sees ~1,000 ft of it at once.
+  // The bore, rods and bit are exaggerated in width so they read. Front face at z = 0; the bore runs down x = 0.
+  //   const S = WORLD.section({ bottom: 4400, w: 160 })       add S to a scene
+  //   S.userData.set(depthFt, stroke, o)   bit at depthFt, rods lifted by the stroke (RIG.strokeAt); o.casing (ft of casing),
+  //                                        o.flow 0..1 water rising up the tube from the aquifer (chapter G), o.cave 0..1
+  //   S.userData.y(ft) → world y of a depth;  S.userData.fossils / .aquifer → groups to show, hide or light
+  const VS = .1;
+  function section(o = {}) {
+    const THREE = T(), g = new THREE.Group(), Wd = o.w ?? 160, Dp = o.d ?? 50, bottom = o.bottom ?? 4400, y = ft => -ft * VS;
+    const add = (m, p) => { if (p) m.position.set(...p); g.add(m); return m; };
     for (const [a, b, col, name] of STRATA) {
       if (a >= bottom) continue;
-      const hh = Math.min(b, bottom) - a, m = P3.mesh(P3.box(Wd, hh, Dp), col, { style: name.includes('water') ? .5 : 1 });
-      m.position.set(0, -a - hh / 2, -Dp / 2); m.userData.stratum = name; g.add(m);
-      for (let i = 0; i < Math.min(40, hh / 30); i++) {   // boulders and nodules proud of the face
-        const s = P3.mesh(new THREE.IcosahedronGeometry(1.2 + H1(a + i) * 3.5, 1), mixCol(col, AP.graphite, .25));
-        s.position.set((H1(i * 3 + a) - .5) * (Wd - 20), -a - H1(i * 7 + a) * hh, .2); s.scale.z = .5; g.add(s);
+      const hh = (Math.min(b, bottom) - a) * VS, wet = name.includes('water');
+      const m = add(P3.mesh(P3.box(Wd, hh, Dp), col, { style: wet ? .5 : 1 }), [0, y(a) - hh / 2, -Dp / 2]);
+      m.userData.stratum = name;
+      // bedding: thin darker laminations proud of the face, a little wavy (two offset boxes per line)
+      const nl = Math.max(1, Math.round(hh / 7));
+      for (let i = 0; i < nl; i++) {
+        const yy = y(a) - hh * (i + .5 + (H1(a + i) - .5) * .5) / nl;
+        for (let k = 0; k < 3; k++) add(P3.mesh(P3.box(Wd / 3 + 2, .22, .3), mixCol(col, AP.graphite, .35), { cast: false }), [-Wd / 3 + k * Wd / 3, yy + (H1(a + i * 3 + k) - .5) * 1.2, .1]);
+      }
+      // stones and nodules
+      for (let i = 0; i < Math.min(26, hh * 1.2); i++) {
+        const st = add(P3.mesh(new THREE.IcosahedronGeometry(.3 + H1(a + i) * (name.includes('clay') ? .9 : .6), 1), mixCol(col, AP.graphite, .3)),
+          [(H1(i * 3 + a) - .5) * (Wd - 6), y(a) - H1(i * 7 + a) * hh, .15]);
+        st.scale.z = .45; if (Math.abs(st.position.x) < 2.5) st.position.x += 5;
       }
     }
-    // the bore: a dark groove cut into the front face
-    const shaft = P3.mesh(P3.box(o.bore ?? 3, bottom, 3), '#221E1C', { cast: false }); shaft.position.set(0, -bottom / 2, -.9); g.add(shaft);
+    // fossils in the dark shale: ammonites and an ichthyosaur, the Cretaceous sea that laid down these beds
+    const fossils = new THREE.Group(); g.add(fossils);
+    const ammonite = (x, yy, r) => { const a = new THREE.Group(); for (let k = 0; k < 4; k++) { const tr = P3.mesh(new THREE.TorusGeometry(r * (1 - k * .24), r * .09, 6, 28), '#CFC3A8'); a.add(tr); } a.position.set(x, yy, .35); fossils.add(a); };
+    ammonite(-28, y(1260), 2.2); ammonite(34, y(1330), 1.6); ammonite(-52, y(1420), 1.3); ammonite(18, y(1450), 1.1);
+    const ich = new THREE.Group(); ich.position.set(-12, y(1380), .35); ich.rotation.z = -.08; fossils.add(ich);
+    for (let i = 0; i < 26; i++) { const v = P3.mesh(P3.box(.55, .8 - Math.abs(i - 9) * .02, .3), '#D8CCB0'); v.position.set(i * .7 - 6, Math.sin(i * .3) * .5, 0); ich.add(v); }
+    const skull = P3.mesh(new THREE.ConeGeometry(1.1, 5.5, 8).rotateZ(Math.PI / 2), '#D8CCB0'); skull.position.set(-9.2, .1, 0); ich.add(skull);
+    for (const [x, yy, r] of [[-3, -1.6, -.6], [4, -1.5, -.4]]) { const fl = P3.mesh(P3.box(2.6, .5, .25), '#D8CCB0'); fl.position.set(x, yy, 0); fl.rotation.z = r; ich.add(fl); }
+    for (let i = 0; i < 14; i++) { const rb = P3.mesh(P3.box(.16, 1.8, .16), '#CFC3A8'); rb.position.set(i * .7 - 5, -1, 0); rb.rotation.z = .25; ich.add(rb); }
+    // the aquifer: glints in the pores
+    const aquifer = new THREE.Group(); g.add(aquifer);
+    for (let i = 0; i < 60; i++) { const d = P3.mesh(new THREE.SphereGeometry(.18, 6, 4), '#DCEFF5', { cast: false, style: .6 }); d.position.set((H1(i * 5) - .5) * (Wd - 4), y(4040) - H1(i * 9) * 30, .3); aquifer.add(d); }
+    // the bore: a dark slot cut into the face, the iron casing tube, the yellow rods and the bit
+    const slot = add(P3.mesh(P3.box(2.6, bottom * VS, 1.4), '#1C1917', { cast: false }), [0, -bottom * VS / 2, .2]);
+    const casing = add(P3.mesh(P3.cyl(1.05, 1.05, 1, 16), '#6E6A64'), [0, 0, .6]);
+    const rods = add(P3.mesh(P3.cyl(.32, .32, 1, 10), '#E0B85A'), [0, 0, .75]);
+    const bit = add(P3.mesh(new THREE.ConeGeometry(.9, 3.2, 4).rotateX(Math.PI), '#4A4744'), [0, 0, .75]);
+    const water = add(P3.mesh(P3.cyl(.8, .8, 1, 12), AP.water, { style: .5, cast: false }), [0, 0, .7]); water.visible = false;
+    const surf = add(P3.mesh(P3.box(Wd, .6, Dp), '#9C7A50', { style: .8 }), [0, .3, -Dp / 2]);
+    g.userData = { y, fossils, aquifer, slot, casing, rods, bit, water, surf, VS,
+      set(depth, stroke = 0, oo = {}) {
+        const lift = stroke < .75 ? Math.sin(stroke / .75 * Math.PI / 2) : 1 - Math.pow((stroke - .75) / .25, 2), up = lift * (oo.amp ?? 1) * 1.6;
+        const bot = y(depth) + up, cas = Math.min(depth, oo.casing ?? depth * .8);
+        casing.scale.y = Math.max(.01, cas * VS); casing.position.y = -cas * VS / 2;
+        rods.scale.y = Math.max(.01, -bot + 2.8 + 6); rods.position.y = (bot + 2.8 + 6) / 2;
+        bit.position.y = bot + 1.6;
+        const f = oo.flow ?? 0; water.visible = f > 0;
+        if (f > 0) { const top = lerp(y(depth), 2, f); water.scale.y = Math.max(.01, top - y(depth)); water.position.y = (top + y(depth)) / 2; }
+      } };
     return g;
   }
-  return { terrain, heightAt, tree, trees, homestead, windmill, cracks, water, waterhole, strata, STRATA, noise2 };
+  // The depth board: a plank nailed to a derrick leg, the day's depth chalked on it. board.userData.set(ft)
+  function depthBoard(o = {}) {
+    const b = P3.plate(o.w ?? 3.2, o.h ?? 1.6, '#3A332C');
+    b.userData.set = ft => b.userData.paint((c, w, h) => {
+      c.strokeStyle = 'rgba(230,225,210,.25)'; c.lineWidth = 3; for (let i = 0; i < 9; i++) { c.beginPath(); c.moveTo(0, h * (i + .5) / 9); c.lineTo(w, h * (i + .5) / 9 + (i % 3) - 1); c.stroke(); }
+      c.fillStyle = '#EDE6D6'; c.font = `${Math.round(h * .55)}px "Cabin Sketch", serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.globalAlpha = .92; c.fillText(`${Math.round(ft)} FT`, w / 2, h * .54); c.globalAlpha = .3; c.fillText(`${Math.round(ft)} FT`, w / 2 + 3, h * .54 - 2);
+    }, Math.round(ft));
+    b.userData.set(o.ft ?? 0); return b;
+  }
+  return { depthBoard, terrain, heightAt, tree, trees, homestead, windmill, cracks, water, waterhole, section, STRATA, VS, noise2 };
 })();

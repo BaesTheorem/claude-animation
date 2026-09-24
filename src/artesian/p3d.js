@@ -15,6 +15,8 @@
 //   P3.box / P3.cyl / P3.beam(a, b, w, d)  geometry helpers (beam: a timber between two points)
 //   P3.project(cam, [x,y,z]) → [sx, sy, depth]   put 2D effects (psmoke, pglow, sparks) on a 3D point
 //   P3.lamp(sc, [x,y,z], col, k, dist)     warm point light with shadows (lantern, firebox, forge)
+//   P3.cached(key, () => build())          build a scene once per page and keep the 3 most recent (use one key per chapter set)
+//   P3.plate(wFt, hFt, bg, paint)          a lettered/painted plate in perspective (depth board, maker's plate); .userData.paint(fn, key)
 //
 // The 2D pencil engine (lib.js) still draws skies, glows, smoke, water sparkle and the lyric strip; P3 is for
 // anything solid that the camera should see in perspective.
@@ -184,7 +186,7 @@ const P3 = (() => {
   function twin(m) {
     let t = albedoCache.get(m); if (t) return t;
     const THREE = T3(), src = m.userData.albedo || m.color || new THREE.Color(1, 1, 1);
-    t = new THREE.MeshBasicMaterial({ color: src.clone ? src.clone() : new THREE.Color(src), side: m.side, map: m.map || null, vertexColors: !!m.vertexColors,
+    t = new THREE.MeshBasicMaterial({ color: m.map ? new THREE.Color(1, 1, 1) : (src.clone ? src.clone() : new THREE.Color(src)), side: m.side, map: m.map || null, vertexColors: !!m.vertexColors,
       transparent: true, opacity: m.userData.style ?? 1, blending: THREE.NoBlending });
     albedoCache.set(m, t); return t;
   }
@@ -229,5 +231,38 @@ const P3 = (() => {
   function lamp(sc, p, col = AP.lamp, k = 30, dist = 60, shadow = true) {
     const l = new (T3().PointLight)(col, k, dist, 1.6); l.position.set(...p); l.castShadow = shadow; l.shadow.mapSize.set(512, 512); l.shadow.bias = -.002; (sc.scene || sc).add(l); return l;
   }
-  return { init, scene, cam, look, mat, mesh, draw, box, cyl, beam, project, lamp, renderer: () => R };
+  // Scene cache: build a chapter's scene once (lazily, on its first frame) and keep the few most recently used.
+  // Render workers walk the film in time order, so older chapters are disposed instead of piling up in memory.
+  const CACHE = new Map(); let TICK = 0; const MAXC = 3;
+  function dispose(o) {
+    const s = o.scene || o;
+    s.traverse(ob => {
+      if (ob.isMesh && !ob.isSkinnedMesh && ob.geometry && !ob.userData.shared) ob.geometry.dispose();
+      if (ob.material) (Array.isArray(ob.material) ? ob.material : [ob.material]).forEach(m => { const tw = albedoCache.get(m); if (tw) tw.dispose(); m.dispose(); });
+      if (ob.isLight && ob.shadow && ob.shadow.map) ob.shadow.map.dispose();
+    });
+  }
+  function cached(key, build) {
+    let e = CACHE.get(key);
+    if (!e) { init(); e = { o: build() }; CACHE.set(key, e); }
+    e.used = ++TICK;
+    while (CACHE.size > MAXC) {
+      let old = null; for (const [k, v] of CACHE) if (k !== key && (!old || v.used < old[1].used)) old = [k, v];
+      if (!old) break; dispose(old[1].o); CACHE.delete(old[0]);
+    }
+    return e.o;
+  }
+  // A flat plate whose face is a canvas you letter or paint (depth board, maker's plate, a letter in a hand). It sits in
+  // the scene in true perspective. plate.userData.paint(fn) repaints: fn(ctx, w, h) on a 512-wide canvas.
+  function plate(wFt, hFt, col = '#2E2A26', fn = null) {
+    const THREE = T3(), cw = 512, ch = Math.max(16, Math.round(512 * hFt / wFt)), cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+    const m = mesh(new THREE.PlaneGeometry(wFt, hFt), '#ffffff', { cast: false });
+    m.material.map = tex; m.material.needsUpdate = true;
+    let last = null;
+    m.userData.paint = (f, key) => { if (key !== undefined && key === last) return; last = key; const c = cv.getContext('2d'); c.fillStyle = col; c.fillRect(0, 0, cw, ch); f && f(c, cw, ch); tex.needsUpdate = true; const tw = albedoCache.get(m.material); if (tw) { tw.map = tex; tw.needsUpdate = true; } };
+    m.userData.paint(fn, 'init');
+    return m;
+  }
+  return { init, scene, cam, look, mat, mesh, draw, box, cyl, beam, project, lamp, cached, plate, renderer: () => R };
 })();
