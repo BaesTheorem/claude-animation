@@ -73,6 +73,6 @@ const LYRICS = [
   {"text": "Oh we'll sink it deeper down", "start": 281.67, "end": 284.62},
   {"text": "Sinking down, deeper down,", "start": 284.62, "end": 287.38},
   {"text": "Oh we'll sink it deeper down", "start": 287.38, "end": 290.2},
-  {"text": "Sinking down, deeper down,", "start": 290.2, "end": 292.75},
-  {"text": "Oh we'll sink it deeper down", "start": 292.75, "end": 292.8}
+  {"text": "Sinking down, deeper down,", "start": 290.2, "end": 292.8},
+  {"text": "Oh we'll sink it deeper down", "start": 293.5, "end": 293.5}
 ];
