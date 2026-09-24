@@ -43,3 +43,12 @@ Several chapters render at once on an 8 GB machine: keep `--w` ≤ 480 for sheet
 
 ## Report
 When done, report: your shot list with times, which transitions you used, anything you defined that other chapters should reuse (globals), known weaknesses, and any shared-helper bugs you worked around. Don't paste code.
+
+## Notes from the first wave (chapters A–D are built; read their headers)
+- **Fixed in the shared files:** `beam()` now rises slowly and drops fast, landing at ph = 1 (use `ph = frac(bpOf(t))` to land every beat; `o.post` sets the post height). `POSES.hamUp` stores its arms past +π, so `kp(hamDown → hamUp)` swings over the head (don't subtract TAU any more). `dive()`'s bit lifts late in the beat and slams down on it; `dive()` has an `over` hook drawn after the shaft and rods. `pageTurn()` fully covers at p = .5. `engine()` takes `o.smokePh` to decouple smoke speed from the flywheel.
+- **Known engine quirk:** `pline` widths scale with camera zoom (textures don't). At zoom ≥ 3 pass smaller widths.
+- **Globals you can call** (defined by earlier chapters, documented at the top of their files):
+  - chA: `homestead(x, y, s, o)` (veranda, `table`, `thermo: {level, burst}`, `tank`, `green`, hooks), `openingFrame(t, o)` (the film's opening composition; `o.wet` and its parts for the ending; `cam`, `draw`, `colour`).
+  - chB: `devil(x, y, s, pose, hooks)`, `devilHall(x, y, s, o)` (incl. `wet`), `hallInDive(t, lt, dur, o, hallO)`, `HALL`, `teacup()`. After chapter B the devil's chair is crushed, the roof is holed and he wears the teacup on his horn.
+- **Worth copying (local to their files, copy don't call):** chD `ik()`/`reach()`/`probe()` (arm IK so hands land on a handle or rope), `backMan()` (a figure from behind), `hatchIris`, `speedLines`, `jet` (steam jet); chC `horse()`, `dog()`, `kpe()` (pose keys with per-segment easing), `memoryGrade()`.
+- The film so far: the look is set by A–D. Before you start, render a sheet of the chapter before yours and the one after (if built) to match palette, scale and staging, and check both seams.
