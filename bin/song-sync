@@ -1,0 +1,123 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.10,<3.13"
+# dependencies = ["librosa>=0.10", "numpy"]
+# ///
+"""song-sync: point the project at a song, so dances, pulse() and cuts lock to it.
+
+    bin/song-sync assets/song.mp3                       detect tempo + first beat, write src/config.js
+    bin/song-sync assets/song.mp3 --bpm=88              trust a known tempo, only find the offset
+    bin/song-sync assets/song.mp3 --lyrics=timings.json also write src/lyrics.js (line cue times)
+    bin/song-sync assets/song.mp3 --dry-run             print what it found, write nothing
+
+Writes PROJECT = { duration, bpm, offset, audio } into src/config.js. `offset` is the first
+detected beat, which is usually but not always the downbeat: check a strip around it and nudge
+by one beat (60 / bpm s) if the bounce lands on the off-beat.
+
+--lyrics takes the timings.json from the harness lyrics-video pipeline (whisper word times
+aligned to the exact lyrics) and writes `const LYRICS = [{ text, start, end }, ...]` to
+src/lyrics.js, adding its script tag to studio.html. The kit's rule stands: lyrics are cues
+for what to act and when to cut, not text to put on screen.
+"""
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def detect(audio: Path, bpm_hint: float | None):
+    import librosa
+    import numpy as np
+
+    y, sr = librosa.load(str(audio), sr=22050, mono=True)
+    duration = len(y) / sr
+    onset = librosa.onset.onset_strength(y=y, sr=sr)
+    if not bpm_hint:
+        # Blind tempo often lands on a 3:2 or 2:1 relative (P(doom): 129 found, 88 true, 88 was
+        # third). Show the tempogram's strongest peaks so the right one can be picked.
+        tg = librosa.feature.tempogram(onset_envelope=onset, sr=sr)
+        ac, bpms = tg.mean(axis=1), librosa.tempo_frequencies(tg.shape[0], sr=sr)
+        peaks = [i for i in range(1, len(ac) - 1)
+                 if 60 < bpms[i] < 190 and ac[i] >= ac[i - 1] and ac[i] >= ac[i + 1]]
+        peaks.sort(key=lambda i: -ac[i])
+        print("tempo candidates: " + ", ".join(f"{bpms[i]:.1f}" for i in peaks[:3])
+              + "  (blind guess; confirm with --bpm)", file=sys.stderr)
+    # `bpm=` pins the tempo; without a hint, let librosa estimate it.
+    kw = {"bpm": bpm_hint} if bpm_hint else {}
+    tempo, beats = librosa.beat.beat_track(onset_envelope=onset, sr=sr, units="time", **kw)
+    bpm = float(bpm_hint or np.atleast_1d(tempo)[0])
+    beats = np.asarray(beats, dtype=float)
+    if len(beats) < 8:
+        sys.exit(f"only {len(beats)} beats found in {audio}: pass --bpm and set offset by hand")
+    # Fit one beat phase to the whole track instead of trusting the first tracked beat,
+    # which is often a stray onset in the intro.
+    period = 60.0 / bpm
+    phases = np.mod(beats, period)
+    ang = phases / period * 2 * np.pi
+    phase = (np.angle(np.mean(np.exp(1j * ang))) % (2 * np.pi)) / (2 * np.pi) * period
+    first = beats[0] - ((beats[0] - phase) % period)
+    if first < 0:
+        first += period
+    return round(duration, 2), round(bpm, 2), round(float(first), 3)
+
+
+def write_config(duration, bpm, offset, audio_rel):
+    cfg = ROOT / "src" / "config.js"
+    text = cfg.read_text()
+    new = (f"const PROJECT = {{ duration: {duration}, bpm: {bpm}, offset: {offset}, "
+           f"audio: {json.dumps(audio_rel)} }};")
+    text, n = re.subn(r"^const PROJECT = \{.*?\};", new, text, flags=re.M | re.S)
+    if n != 1:
+        sys.exit("could not find the `const PROJECT = {...};` line in src/config.js")
+    cfg.write_text(text)
+
+
+def write_lyrics(timings: Path):
+    data = json.loads(timings.read_text())
+    lines = [{"text": ln["text"], "start": round(ln["start"], 2), "end": round(ln["end"], 2)}
+             for ln in data.get("lines", data)]
+    body = ",\n".join("  " + json.dumps(ln) for ln in lines)
+    (ROOT / "src" / "lyrics.js").write_text(
+        "// lyrics.js: written by bin/song-sync from lyrics-video timings. Cue times for acting a line\n"
+        "// and cutting on it; the kit's no-text rule still applies.\n"
+        f"const LYRICS = [\n{body}\n];\n")
+    studio = ROOT / "studio.html"
+    html = studio.read_text()
+    tag = '<script src="src/lyrics.js"></script>'
+    if tag not in html:
+        html = html.replace('<script src="src/config.js"></script>',
+                            '<script src="src/config.js"></script>\n' + tag, 1)
+        studio.write_text(html)
+    return len(lines)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("audio", type=Path)
+    ap.add_argument("--bpm", type=float, help="known tempo; skips tempo estimation")
+    ap.add_argument("--lyrics", type=Path, help="lyrics-video timings.json")
+    ap.add_argument("--dry-run", action="store_true")
+    a = ap.parse_args()
+
+    audio = a.audio.resolve()
+    if not audio.exists():
+        sys.exit(f"no such file: {a.audio}")
+    duration, bpm, offset = detect(audio, a.bpm)
+    try:
+        audio_rel = str(audio.relative_to(ROOT))
+    except ValueError:
+        audio_rel = str(audio)
+    print(f"duration {duration}s  bpm {bpm}  first beat {offset}s  (beat = {60 / bpm:.3f}s)")
+    if a.dry_run:
+        return
+    write_config(duration, bpm, offset, audio_rel)
+    print("wrote src/config.js")
+    if a.lyrics:
+        print(f"wrote src/lyrics.js ({write_lyrics(a.lyrics)} lines)")
+
+
+if __name__ == "__main__":
+    main()

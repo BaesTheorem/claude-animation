@@ -1,2 +1,5 @@
 node_modules
 out/
+assets/*.mp3
+assets/*.wav
+assets/*.flac

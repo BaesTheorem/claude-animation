@@ -25,6 +25,18 @@ node render.mjs --clip --out=out/video.mp4
 
 That renders the 11-second demo in [src/scenes/demo.js](src/scenes/demo.js). Open [studio.html](studio.html) in Chrome to scrub through it. Add `?loop=emotions` or `?loop=views` to see the model sheets. If Chrome isn't in a standard location, pass `--chrome=<path>` or set `CHROME_PATH`.
 
+## Song sync (this fork)
+
+`bin/song-sync` points the project at a song so dances, `pulse()` and cuts lock to it. It needs [uv](https://docs.astral.sh/uv/), which installs librosa on first run.
+
+```bash
+bin/song-sync assets/song.mp3 --bpm=88                          # write duration, bpm, first beat and audio into src/config.js
+bin/song-sync assets/song.mp3 --dry-run                         # blind: prints the top tempo candidates, writes nothing
+bin/song-sync assets/song.mp3 --bpm=88 --lyrics=timings.json    # also write src/lyrics.js with per-line cue times
+```
+
+Pass `--bpm` when you know the tempo. Blind detection often picks a 3:2 or 2:1 relative of the real one: on the P(doom) track it guessed 129 against a true 88, which came third in its candidate list. With the tempo given, the offset it found was 44 ms (about one frame) from the hand-measured value. `--lyrics` takes a list of `{text, start, end}` lines (or `{"lines": [...]}`). The lines are there to time acting and cuts, so the no-text rule still holds.
+
 ## What's here
 
 | path | what it is |
