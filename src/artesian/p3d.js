@@ -249,11 +249,21 @@ const P3 = (() => {
   // Render workers walk the film in time order, so older chapters are disposed instead of piling up in memory.
   const CACHE = new Map(); let TICK = 0; const MAXC = 3;
   function dispose(o) {
-    const s = o.scene || o;
-    s.traverse(ob => {
+    // free every Object3D reachable from the cached value (a scene, { scene }, { o: { scene } }, { site, section } ...)
+    const seen = new Set(), roots = [];
+    const walk = (v, d) => {
+      if (!v || typeof v !== 'object' || seen.has(v) || d > 3) return; seen.add(v);
+      if (v.isObject3D) { roots.push(v); return; }
+      if (Array.isArray(v)) { v.forEach(x => walk(x, d + 1)); return; }
+      for (const k of Object.keys(v)) walk(v[k], d + 1);
+    };
+    walk(o, 0);
+    const done = new Set();
+    for (const r of roots) r.traverse(ob => {
+      if (done.has(ob)) return; done.add(ob);
       if (ob.isMesh && !ob.isSkinnedMesh && ob.geometry && !ob.userData.shared) ob.geometry.dispose();
-      if (ob.material) (Array.isArray(ob.material) ? ob.material : [ob.material]).forEach(m => { const tw = albedoCache.get(m); if (tw) tw.dispose(); m.dispose(); });
-      if (ob.isLight && ob.shadow && ob.shadow.map) ob.shadow.map.dispose();
+      if (ob.material) (Array.isArray(ob.material) ? ob.material : [ob.material]).forEach(m => { const tw = albedoCache.get(m); if (tw) tw.dispose(); if (m.map && m.map.isCanvasTexture) m.map.dispose(); m.dispose(); });
+      if (ob.isLight && ob.shadow && ob.shadow.map) { ob.shadow.map.dispose(); ob.shadow.map = null; }
     });
   }
   function cached(key, build) {
@@ -262,7 +272,7 @@ const P3 = (() => {
     e.used = ++TICK;
     while (CACHE.size > MAXC) {
       let old = null; for (const [k, v] of CACHE) if (k !== key && (!old || v.used < old[1].used)) old = [k, v];
-      if (!old) break; dispose(old[1].o); CACHE.delete(old[0]);
+      if (!old) break; CACHE.delete(old[0]); try { dispose(old[1].o); } catch (e) { console.warn('P3 dispose', e.message); }
     }
     return e.o;
   }
