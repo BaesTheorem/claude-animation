@@ -107,7 +107,7 @@
         vec2 q = vUv - .5; q.x *= uRes.x / uRes.y;
         float v = smoothstep(1.05, .25, length(q));          // vignette
         c *= mix(.55, 1.0, v);
-        c += (h(gl_FragCoord.xy) - .5) * .018;               // fine grain, new each frame
+        c += (h(gl_FragCoord.xy) - .5) * .011;               // fine static grain (dither)
         gl_FragColor = vec4(c * uFade, 1.0);
       }`
   });
@@ -365,7 +365,7 @@
     // intro and outro light
     const fadeIn = smooth(seg(t, .15, 1.4)), fadeOut = 1 - smooth(seg(t, DUR - 3.2, DUR - .4));
     FINISH.uniforms.uFade.value = Math.min(1, .0 + fadeIn) * fadeOut;
-    FINISH.uniforms.uSeed.value = Math.floor(t * 30) % 997;
+    FINISH.uniforms.uSeed.value = 0;   // static grain: it dithers the dark gradients, and a video codec keeps it for free
     const climaxK = smooth(seg(B, 57.8, 59.4)) * (1 - smooth(seg(B, 61, 62.8)));
     bloom.strength = .95 + .9 * climaxK;
     bloom.radius = .55 + .15 * climaxK;
