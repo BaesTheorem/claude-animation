@@ -29,7 +29,12 @@
 <!-- reference sheets (standalone loops) -->
 <script src="src/sheets.js"></script>
 <!-- your video: add a script per scene file, in order -->
-<script src="src/scenes/demo.js"></script>
+<script src="src/lastlight/lib.js"></script>
+<script src="src/lastlight/sheet.js"></script>
+<script src="src/lastlight/chA.js"></script>
+<script src="src/lastlight/chB.js"></script>
+<script src="src/lastlight/chC.js"></script>
+<script src="src/lastlight/chD.js"></script>
 <script>
   // Open studio.html?loop=emotions (or views) to scrub a standalone loop instead of the video.
   const q = new URLSearchParams(location.search).get('loop'); if (q && LOOPS[q]) window.LOOP = LOOPS[q];
