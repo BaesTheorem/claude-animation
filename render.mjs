@@ -11,7 +11,8 @@
 //     node render.mjs --encode --out=out/video.mp4                                           out/frames → MP4
 //   Standalone loops (LOOPS in the page): add --loop=<name> to any of the above (times are then loop times), or
 //     node render.mjs --loop=emotions --png --out=out/loop_emotions                          one cycle as PNGs (for GIFs)
-//   Music: --audio=assets/song.mp3 (or PROJECT.audio) is muxed into --clip and --encode. Other flags: --fps=24,
+//   Music: --audio=assets/song.mp3 (or PROJECT.audio) is muxed into --clip and --encode. --page=other.html renders a
+//   page other than studio.html (it must define window.ready, renderAt, renderSheet and DUR). Other flags: --fps=24,
 //   --chrome=<path to Chrome/Chromium>.
 import puppeteer from 'puppeteer-core';
 import { spawn } from 'node:child_process';
@@ -19,7 +20,7 @@ import { mkdirSync, writeFileSync, existsSync, statSync, renameSync, readdirSync
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const args = Object.fromEntries(process.argv.slice(2).map(a => { const [k, v] = a.replace(/^--/, '').split('='); return [k, v ?? true]; }));
+const args = Object.fromEntries(process.argv.slice(2).map(a => { const s = a.replace(/^--/, ''), i = s.indexOf('='); return i < 0 ? [s, true] : [s.slice(0, i), s.slice(i + 1)]; }));
 const CHROMES = [args.chrome, process.env.CHROME_PATH, 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'];
 const CHROME = CHROMES.find(p => p && existsSync(p));
@@ -48,7 +49,7 @@ async function openPage(tag = '') {
   const page = await browser.newPage();
   page.on('console', m => { if (['error', 'warn'].includes(m.type())) console.log(`[page${tag}]`, m.text()); });
   page.on('pageerror', e => console.log(`[page error${tag}]`, e.message));
-  await page.goto(pathToFileURL(resolve('studio.html')).href + '?render', { waitUntil: 'networkidle0' });
+  await page.goto(pathToFileURL(resolve(args.page || 'studio.html')).href + '?render' + (args.query ? '&' + args.query : ''), { waitUntil: 'networkidle0' });
   await page.waitForFunction('window.ready === true', { timeout: 60000 });
   if (args.loop) {
     const ok = await page.evaluate(name => { if (!LOOPS[name]) return false; window.LOOP = LOOPS[name]; return true; }, args.loop);
