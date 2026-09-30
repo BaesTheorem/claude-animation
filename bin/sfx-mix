@@ -19,7 +19,9 @@ A cue places one sound at time t (seconds):
                 "jitter": .1 varies rate and gain per hit so repeats don't sound copied
   synths:       "src": "synth:slide" (slide whistle, f0 → f1 Hz over dur), "synth:whoosh" (a noise band sweeping
                 f0 → f1), "synth:bubbles" (dense little bubble blips, rate = bubbles/s), "synth:tweet"
-                (birdie chirps, rate = chirps/s), "synth:hum" (a rising buzzy charge-up, f0 → f1)
+                (birdie chirps, rate = chirps/s), "synth:hum" (a rising buzzy charge-up, f0 → f1), "synth:rain" (a rain
+                bed: hiss and droplets, different in each ear; rate = drops/s, attack = fade-in seconds), "synth:purr"
+                (a cat's purr: a low rumble pulsing rate times a second, breath = seconds per breath)
 Sounds are resampled to 48 kHz stereo by ffmpeg; the sum is soft-limited so stacked hits don't clip.
 """
 import argparse
@@ -102,6 +104,29 @@ def synth(kind, c, rng):
         ph = 2 * np.pi * np.cumsum(f) / SR
         y = sum(np.sin(h * ph) / h for h in range(1, 7))
         y *= (.6 + .4 * np.sin(2 * np.pi * (4 + 18 * t / dur) * t)) * (t / dur) ** .7 * env(n, .05, .05) * .35
+    elif kind == "rain":   # a rain bed: band-limited hiss plus a patter of droplets, independent in each ear
+        chans = []
+        fr = np.fft.rfftfreq(n, 1 / SR)
+        for ch in range(2):
+            spec = np.fft.rfft(rng.standard_normal(n)) * np.exp(-.5 * ((np.log(fr + 1) - np.log(2600)) / .9) ** 2)
+            hiss = np.fft.irfft(spec, n)
+            hiss *= (1 + .15 * np.sin(2 * np.pi * (.13 + .07 * ch) * t + rng.uniform(0, 6))) / (np.abs(hiss).max() + 1e-9)
+            drops = np.zeros(n)
+            L = int(.02 * SR)
+            tt = np.arange(L) / SR
+            for _ in range(int(c.get("rate", 90) * dur)):
+                s = int(rng.random() * n)
+                d = np.sin(2 * np.pi * rng.uniform(1800, 6500) * tt) * np.exp(-tt / rng.uniform(.002, .008)) * rng.uniform(.2, 1)
+                e = min(n, s + L); drops[s:e] += d[:e - s]
+            chans.append((hiss * .5 + drops * .25) * env(n, c.get("attack", 2.0), .3) * .5)
+        return np.stack(chans, axis=1).astype(np.float32)
+    elif kind == "purr":   # a cat's purr: a low rumble pulsing about 25 times a second, rising and falling with each breath
+        fr = np.fft.rfftfreq(n, 1 / SR)
+        rumble = np.fft.irfft(np.fft.rfft(rng.standard_normal(n)) * np.exp(-.5 * ((fr - 140) / 70) ** 2), n)
+        rumble /= np.abs(rumble).max() + 1e-9
+        pulse = (.5 + .5 * np.sin(2 * np.pi * c.get("rate", 25) * t)) ** 2
+        breath = .6 + .4 * np.sin(np.pi * t / c.get("breath", 1.8)) ** 2
+        y = rumble * pulse * breath * env(n, .4, .6) * .6
     else:
         sys.exit(f"unknown synth: {kind}")
     return np.stack([y, y], axis=1).astype(np.float32)
@@ -133,7 +158,7 @@ def mix(sheet):
             y = synth(c["src"][6:], c, rng)
             if c.get("lowpass"):   # muffle a synth the same way ffmpeg muffles a file
                 y = np.frombuffer(subprocess.run(["ffmpeg", "-v", "error", "-f", "f32le", "-ar", str(SR), "-ac", "2", "-i", "-", "-af", f"lowpass=f={c['lowpass']}",
-                                                  "-f", "f32le", "-ac", "2", "-ar", str(SR), "-"], input=y.tobytes(), capture_output=True, check=True).stdout, dtype=np.float32).reshape(-1, 2)
+                                                  "-f", "f32le", "-ac", "2", "-ar", str(SR), "-"], input=y.tobytes(), capture_output=True, check=True).stdout, dtype=np.float32).reshape(-1, 2).copy()
         else:
             y = decode(sfx_dir / c["src"], rate, c.get("lowpass"), c.get("offset", 0), c.get("dur"))
         if c.get("fade"):
