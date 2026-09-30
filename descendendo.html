@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Descendendo ascendit</title>
+<style>
+  html, body { margin: 0; background: #05060d; color: #ddd; font: 13px system-ui, sans-serif; }
+  main { padding: 12px; display: grid; gap: 8px; }
+  #view { width: min(100%, 1280px); aspect-ratio: 16 / 9; height: auto; background: #05060d; }
+  .bar { display: flex; gap: 10px; align-items: center; max-width: 1280px; }
+  #scrub { flex: 1; }
+  #tt { font-variant-numeric: tabular-nums; min-width: 190px; }
+</style>
+<script src="vendor/three-geo.bundle.js"></script>
+<script src="src/descendendo/score.js"></script>
+</head>
+<body>
+<main>
+  <div id="stage"></div>
+  <div class="bar"><input id="scrub" type="range" min="0" max="259" step="0.0333" value="0"><span id="tt">loading…</span></div>
+</main>
+<script src="src/descendendo/scene.js"></script>
+</body>
+</html>
