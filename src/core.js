@@ -15,7 +15,19 @@ const ease = x => { x = clamp(x); return x * x * (3 - 2 * x); };
 const easeOut = x => 1 - Math.pow(1 - clamp(x), 3);
 const backOut = x => { x = clamp(x); const s = 1.9; return 1 + (s + 1) * Math.pow(x - 1, 3) + s * Math.pow(x - 1, 2); };
 const hash = i => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
-const bpOf = t => (t - OFF) / BEAT;
+// Beat position of time t. With PROJECT.beats (the time of every beat, for music played with rubato) the clock follows
+// the performance, and beat 0 is PROJECT.beats[0]; otherwise it is the fixed grid of PROJECT.bpm from PROJECT.offset.
+function beatClock(B) {
+  const n = B.length;
+  return t => {
+    if (t <= B[0]) return (t - B[0]) / (B[1] - B[0]);
+    if (t >= B[n - 1]) return n - 1 + (t - B[n - 1]) / (B[n - 1] - B[n - 2]);
+    let lo = 0, hi = n - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (B[m] <= t) lo = m; else hi = m; }
+    return lo + (t - B[lo]) / (B[lo + 1] - B[lo]);
+  };
+}
+const bpOf = PROJECT.beats ? beatClock(PROJECT.beats) : t => (t - OFF) / BEAT;
 // Seeded by the boil frame, so linework "boils" at BOIL fps like hand-drawn animation.
 const jit = a => (random() * 2 - 1) * a;
 // Each boil drawing holds for several frames, so whatever isn't moving must draw the same until the next one. But a moving
