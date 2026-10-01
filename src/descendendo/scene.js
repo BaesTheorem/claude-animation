@@ -673,11 +673,11 @@
   }
 
   // ---------------------------------------------------------------- kit interface (render.mjs)
-  const out2d = view.getContext('2d');
+  const out2d = view.getContext('2d'), RENDERING = location.search.includes('render');
   function frame(t) {
     update(t);
     if (DBG('only') === 'guide') scene.children.forEach(o => { if (o !== window.__lines[0]) o.visible = false; });
-    composer.render(); out2d.drawImage(canvas, 0, 0);
+    composer.render(); if (!RENDERING) out2d.drawImage(canvas, 0, 0);   // the preview copy costs time at 4K
   }
   window.renderAt = async (t, type = 'image/png', q = .92) => { frame(t); return canvas.toDataURL(type, q); };
   window.renderSheet = async (times, cols = 3, w = 640, crop = null) => {
