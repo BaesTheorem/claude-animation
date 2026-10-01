@@ -1,14 +1,19 @@
 // chD.js: chapter D of "Last Light of September", the last light (BAR(29) → BAR(39)). See docs/lastlight/STORYBOARD.md.
-//   D1  BAR(29) → BAR(33)  out of the gold flash: the cottage door bursts open, Clawd hops out onto the porch and the cat
-//                         follows. The camera pulls back and up (a dolly: far layers shrink less) to reveal the rain-washed
-//                         valley under a sunset breaking below lifting clouds. A rainbow blooms over the orchard on BAR(31);
-//                         Clawd is starstruck, and on the surge (BAR(32)) both arms go up. Clawd bounds off the porch: cut
-//                         on action.
-//   D2  BAR(33) → BAR(39)  the yard: Clawd lands, sees the leaf pile by the maple (idea, mischief), backs up, runs, leaps and
-//                         lands in it on AT(34, 1): the leaves burst up, hang and drift down. The cat pounces in (bar 35);
-//                         Clawd pops out laughing, leaves on the beanie (bar 36); the cat pops out wearing a leaf (bar 37);
-//                         they lie back and watch the sun touch the hills (bar 38). The camera tilts up and pushes in until
-//                         the sun's disc sits at screen (1180, 330), radius 150, for the match cut to the lamp in C2.
+//   D1  BAR(29) → BAR(33)  out of the gold flash (flash(1 - k, '#FFE7A8') over the first .7 s): the cottage door shakes twice and
+//                         bursts open (a camera kick, warm light spilling onto the deck); Clawd hops out onto the porch and the cat
+//                         steps out of the lit doorway to rub against him. The camera pulls back and up (a dolly: far layers shrink
+//                         less) to reveal the rain-washed valley under a sunset breaking below lifting clouds. A rainbow blooms over
+//                         the orchard on BAR(31); Clawd is starstruck, and on the surge (BAR(32)) he turns to face front, both arms
+//                         go up in a V, the rays flare and a gust of leaves lifts off the yard. Then he bounds off the porch: cut on
+//                         action (his screen position and direction match the first frame of D2).
+//   D2  BAR(33) → BAR(39)  the yard: Clawd lands, sees the leaf pile by the maple (idea, mischief), backs up, runs, leaps and lands
+//                         in it on AT(34, 1): the leaves burst up in a fountain, hang and drift down. His beanie's pom-pom pops up
+//                         out of the pile and the cat stalks it and pounces in (BAR(35)); Clawd pops out laughing, leaves on the
+//                         beanie (BAR(36)); the cat pops out wearing a leaf (BAR(37)); they lie back and watch the sun touch the
+//                         hills (BAR(38)). The camera cranes up and pushes in until the sun's disc sits at screen (1180, 330),
+//                         radius 150 (the gold rim is 157), for the match cut to the lamp in C2.
+//   Cost    Frames were over budget because of watercolour fills (about ten times a glow or a wash). Skies (skyLite), the sun, hills,
+//           clouds, wall light, the maple (mapleLite) and the leaf pile (leafPile) are redone with flat washes and glows.
 (() => {
   const tD1 = BAR(29), tD2 = BAR(33), tEnd = BAR(39);
 
@@ -37,17 +42,26 @@
     const [tl, vl] = K[K.length - 1];
     return t > tl ? s + vl * (t - tl) : s;
   }
-  // the low sun: the halo goes down before the light, so the light lands on it (a fill painted after a strong glow goes
-  // pale), then the glow, then the disc as a flat wash
-  function sunDisc(x, y, r, key, a = 1) {
-    boilSeed(key + ' halo');
-    paint(ellPts(x, y, r * 3.4, r * 3.1, 30, r * .1), { fill: '#F4A052', fillOp: 70, bleed: .35, tex: .25, border: .2, ink: null });
-    paint(ellPts(x, y, r * 1.8, r * 1.7, 28, r * .05), { fill: '#FBC878', fillOp: 120, bleed: .25, tex: .2, border: .15, ink: null });
-    glow(x, y, Math.min(r * 9, 500), '#FF9A4E', .72 * a);
-    glow(x, y, r * 2.3, '#FFD49A', .5 * a);
-    boilSeed(key + ' disc');   // a gold rim, then the pale disc, so it reads as a shape against its own light
+  // the low sun: three glows of light (cheap: a fill costs about ten times a glow), then the disc as a flat wash with a gold
+  // rim, so it reads as a shape against its own light. warm 0..1 shifts the disc from cream to gold as it sets.
+  function sunDisc(x, y, r, key, a = 1, warm = 0) {
+    glow(x, y, Math.min(r * 9, 520), '#FF9A4E', .68 * a);
+    glow(x, y, Math.min(r * 4.4, 360), '#FFB866', .5 * a);
+    glow(x, y, r * 2.4, '#FFD49A', .5 * a);
+    boilSeed(key + ' disc');
     paint(ellPts(x, y, r * 1.05, r * 1.05, 44, r * .012), { wash: '#FFCF7E', ink: null });
-    paint(ellPts(x, y, r, r, 44, r * .012), { wash: '#FFF3D4', ink: null });
+    paint(ellPts(x, y, r, r, 44, r * .012), { wash: mixCol('#FFF3D4', '#FFD98C', warm), ink: null });
+  }
+  // lib's sky() with 5 watercolour bands instead of 10: every band is a fill, the costliest mark in the kit
+  function skyLite(a, b, k, o = {}) {
+    const A = SKIES[a].map((c, i) => mixCol(c, SKIES[b][i], clamp(k))), x0 = o.x0 ?? -400, y0 = o.y0 ?? -400, w = o.w ?? W + 800, h = o.h ?? H + 600, n = 6;
+    const cols = [...Array(n)].map((_, i) => { const x = i / (n - 1) * (A.length - 1), j = Math.min(Math.floor(x), A.length - 2); return mixCol(A[j], A[j + 1], x - j); });
+    boilSeed(o.key || 'sky');
+    paint(rectPts(x0, y0, w, h), { wash: cols[0], ink: null });
+    for (let i = 1; i < n; i++) {
+      const yy = y0 + h * i / n, soft = h / n * .6;
+      paint(rectPts(x0 - 40, yy - soft, w + 80, y0 + h - yy + soft + 40), { fill: cols[i], fillOp: 235, bleed: .35, tex: .15, border: .25, ink: null });
+    }
   }
   // remnant rain clouds, lifting and thinning: long streaks, a dusky body over a rim lit from below by the low sun
   function cloudShape(cx, cy, w, h, seed) {
@@ -65,7 +79,8 @@
       const lit = near ? clamp(1 - Math.hypot(cx - near[0], cy - near[1]) / 1100) : .3;
       boilSeed(key + i);
       paint(cloudShape(cx + 10, cy + hh * .2, w * 1.02, hh * .95, i + seed), { wash: mixCol('#F29C86', '#FFD89A', lit), washOp: 225 * op, ink: null });
-      paint(cloudShape(cx, cy, w, hh, i + seed), { wash: mixCol('#957A9C', '#C39098', .45 * lit), washOp: 215 * op, fill: '#6E5A80', fillOp: 45 * op, bleed: .12, tex: .3, border: .4, ink: null });
+      paint(cloudShape(cx, cy, w, hh, i + seed), { wash: mixCol('#957A9C', '#C39098', .45 * lit), washOp: 215 * op, ink: null });
+      inkLine([[cx - w * .36, cy + hh * .05], [cx, cy + hh * .16], [cx + w * .34, cy + hh * .04]], 1.9 * sc, '#A98AA8', 'dry', .6);   // a dry-brush streak for texture
     }
   }
   // a ridge of hills: [x0, x1] at base line yb, amp high, with a saddle at notch = [x, depth, width]
@@ -134,37 +149,40 @@
   const tCatOut = AT(29, 3.95), tCatSit = AT(30, 1.6), tTurnR = BAR(30) - .08, tWalk0 = BAR(30) + .08, tWalk1 = AT(30, 2.05);
   const tPull0 = AT(30, 1.35), tPull1 = BAR(31) - .12, tBow = BAR(31), tLookUp = AT(31, 2.3), tStar = AT(31, 3);
   const tPush0 = AT(31, 2.85), tPush1 = AT(32, 2.2), tJoy = BAR(32), tPlay = AT(32, 3.3), tCrouch = AT(32, 4.15), tBound = AT(32, 4.6);
-  const XP = CX + 330;                                       // where Clawd stops on the porch
+  const XH = CX + 190, XP = CX + 400;                         // where Clawd lands after the hop out, and where he stops on the porch
+  // the surge: the music's climax at BAR(32) flares the rays and the rainbow and kicks the camera (rises to 1 just after tJoy, then fades)
+  const surge = t => seg(t, tJoy - .12, tJoy + .05) * Math.exp(-1.3 * Math.max(0, t - tJoy));
   const R1 = { x: CX + 1150, y: CY - 520, z: .5 };           // the wide frame: far layers are laid out in its screen coordinates
   function cam1(t) {
     const x = kf(t, [[tD1, CX + 40], [tPull0, CX + 120], [tPull1, R1.x], [tPush0, R1.x + 25], [tPush1, CX + 740], [tD2, CX + 790]]);
     const y = kf(t, [[tD1, CY - 250], [tPull0, CY - 240], [tPull1, R1.y], [tPush0, R1.y - 6], [tPush1, CY - 360], [tD2, CY - 352]]);
     const z = kf(t, [[tD1, 1.12], [tPull0, 1.09], [tPull1, R1.z], [tPush0, R1.z], [tPush1, .82], [tD2, .85]]);
-    return { x: x + 6 * Math.sin(t * .5), y: y + 4 * Math.sin(t * .37), z };
+    const kb = t < tBurst ? 0 : Math.exp(-8 * (t - tBurst)), kj = t < tJoy ? 0 : Math.exp(-6 * (t - tJoy)), [sx, sy] = shakeXY(t, 5 * kb + 3.5 * kj);
+    return { x: x + 6 * Math.sin(t * .5) + sx, y: y + 4 * Math.sin(t * .37) + sy, z: z * (1 + .05 * kb + .035 * kj) };
   }
   const SUN1 = [1510, 452], SUNR1 = 54;
 
   // ---------- D1 far layers (design coordinates = the wide frame's screen coordinates) ----------
   function d1Sky(t) {
-    skyBlend('sunset', 'amber', .12, { key: 'D1sky', x0: -90, y0: -140, w: 2100, h: 860 });
-    const [sx, sy] = SUN1;
-    boilSeed('D1rays');   // pale shafts of light fanning up from under the lifting clouds
+    skyLite('sunset', 'amber', .12, { key: 'D1sky', x0: -90, y0: -140, w: 2100, h: 860 });
+    const [sx, sy] = SUN1, sg = surge(t);
+    boilSeed('D1rays');   // pale shafts of light fanning up from under the lifting clouds; they flare on the surge
     for (let i = 0; i < 7; i++) {
-      const a = -Math.PI * (.52 + .5 * i / 6) + .03 * Math.sin(t * .4 + i), len = 1300 + 300 * hash(i + 3), w = 70 + 60 * hash(i + 7);
+      const a = -Math.PI * (.52 + .5 * i / 6) + .03 * Math.sin(t * .4 + i), len = 1300 + 300 * hash(i + 3), w = (70 + 60 * hash(i + 7)) * (1 + .5 * sg);
       paint([[sx + Math.cos(a) * 70, sy + Math.sin(a) * 70], [sx + Math.cos(a + w / len) * len, sy + Math.sin(a + w / len) * len], [sx + Math.cos(a - w / len) * len, sy + Math.sin(a - w / len) * len]],
-        { wash: '#FFE8B8', washOp: 42 + 18 * Math.sin(t * .9 + i * 2), ink: null });
+        { wash: '#FFE8B8', washOp: (42 + 18 * Math.sin(t * .9 + i * 2)) * (1 + 1.3 * sg), ink: null });
     }
-    sunDisc(sx, sy, SUNR1, 'D1sun');
+    sunDisc(sx, sy, SUNR1 * (1 + .12 * sg), 'D1sun', 1, .15 * seg(t, tD1, tD2));
     cloudBank(t, { key: 'D1cl', n: 4, x0: -200, x1: 2150, y: 150, seed: 4, lift: 8, t0: tD1, sc: 1.05, op: lerp(1, .85, seg(t, tD1, tD2)), near: SUN1 });
     cloudBank(t, { key: 'D1cl2', n: 2, x0: 300, x1: 2100, y: 330, seed: 9, lift: 13, t0: tD1, sc: .75, op: lerp(.95, .6, seg(t, tD1, tD2)), near: SUN1 });
   }
   function d1Hills(t) {
     const R1p = ridgePts(-300, 2300, 540, 80, 26, 1.3, [SUN1[0] + 20, 30, 160]);
     boilSeed('D1h1');
-    paint(R1p, { wash: '#A987A6', fill: '#8C6C96', fillOp: 45, bleed: .04, tex: .3, border: .1, ink: null, curv: .5 });
+    paint(R1p, { wash: '#A987A6', ink: null, curv: .5 });
     inkLine(R1p.slice(2).filter(p => Math.abs(p[0] - SUN1[0]) < 700), 1.6, '#FFC98A', 'dry', .5);   // the rim of light on the ridge
     boilSeed('D1h2');
-    paint(ridgePts(-300, 2300, 590, 60, 20, 4.1), { wash: '#94688A', fill: '#7A5478', fillOp: 55, bleed: .04, tex: .35, border: .1, ink: null, curv: .5 });
+    paint(ridgePts(-300, 2300, 590, 60, 20, 4.1), { wash: '#94688A', ink: null, curv: .5 });
     glow(SUN1[0], 555, 280, '#FFB866', .75);   // the sun gilds the ridge under it
   }
   // the rainbow: soft watercolour bands on an arc; k = 0..1 blooms it from the left foot over to the right
@@ -182,13 +200,13 @@
       const cuts = [a0, a0 + .45, 2 * Math.PI - .51, 2 * Math.PI - .06], ops = [.55, 1, .55];
       for (let j = 0; j < 3; j++) {
         const b0 = cuts[j], b1 = Math.min(cuts[j + 1], a1); if (b1 <= b0 + .01) continue;
-        paint(ribbon(arc(r, b0, b1), w, b1 < cuts[j + 1] ? w * .35 : w), { wash: c, washOp: 165 * op * ops[j], ink: null });
+        paint(ribbon(arc(r, b0, b1), w, b1 < cuts[j + 1] ? w * .35 : w), { wash: c, washOp: Math.min(255, 165 * op * ops[j] * (1 + .45 * surge(t))), ink: null });
       }
     });
   }
   function d1Valley(t) {
     boilSeed('D1v fields');
-    paint(ridgePts(-500, 2500, 640, 30, 14, 2.2), { wash: '#C99468', fill: '#A8705E', fillOp: 60, bleed: .05, tex: .5, border: .15, ink: null, curv: .5 });
+    paint(ridgePts(-500, 2500, 640, 30, 14, 2.2), { wash: '#C99468', ink: null, curv: .5 });
     boilSeed('D1v orchard hill');   // the orchard's slope, lit
     paint(through([[560, 760], [700, 640], [880, 585], [1060, 575], [1250, 610], [1420, 690], [1560, 780]], 5), { wash: '#B99A5C', fill: '#8C7A48', fillOp: 70, bleed: .05, tex: .55, border: .2, ink: null });
     // three rows of apple trees across the slope
@@ -215,7 +233,7 @@
   function d1Ground(t, C) {
     boilSeed('D1ground');   // the knoll the cottage sits on, falling away to the right
     paint(through([[-1600, CY + 60], [DECK.x1 + 200, CY + 90], [DECK.x1 + 700, CY + 200], [DECK.x1 + 1500, CY + 330], [4200, CY + 420], [4200, CY + 1600], [-1600, CY + 1600]], 4),
-      { wash: mixCol(FALL.grass, '#D69A62', .25), fill: FALL.grassDk, fillOp: 70, bleed: .03, tex: .6, border: .15, ink: null });
+      { wash: mixCol(FALL.grass, '#D69A62', .25), ink: null });
     boilSeed('D1ground lit');   // the low sun warms the crest
     paint(through([[DECK.x1 + 100, CY + 96], [DECK.x1 + 700, CY + 206], [DECK.x1 + 1500, CY + 336], [4200, CY + 426], [4200, CY + 520], [DECK.x1 + 900, CY + 330], [DECK.x1 + 200, CY + 170]], 4),
       { fill: '#F2B66A', fillOp: 70, bleed: .15, tex: .3, border: .3, ink: null });
@@ -225,36 +243,45 @@
   function d1Deck() {
     const { x0, x1, y0, y1, yb } = DECK;
     boilSeed('D1deck');
-    paint([[x0, y0], [x1, y0], [x1 + 14, y1], [x0 - 14, y1]], { wash: mixCol(FALL.wood, '#E2A06A', .3), fill: FALL.woodDk, fillOp: 60, tex: .6, bleed: .04, ink: PAL.ink, sw: 1.5 });
-    for (let i = 1; i < 4; i++) { const y = y0 + (y1 - y0) * i / 4; inkLine([[x0 - 3.5 * i, y], [lerp(x0, x1, .5), y + 1.5], [x1 + 3.5 * i, y]], 1, FALL.woodDk, 'dry', 0); }
-    paint(rectPts(x0 - 16, y1, x1 - x0 + 32, yb - y1, 1), { wash: FALL.woodDk, fill: FALL.barkDk, fillOp: 60, tex: .6, ink: PAL.ink, sw: 1.5 });
+    paint([[x0, y0], [x1, y0], [x1 + 14, y1], [x0 - 14, y1]], { wash: mixCol(FALL.wood, '#E2A06A', .3), ink: PAL.ink, sw: 1.5 });
+    for (let i = 1; i < 4; i++) { const y = y0 + (y1 - y0) * i / 4; inkLine([[x0 - 3.5 * i, y], [lerp(x0, x1, .5), y + 1.5], [x1 + 3.5 * i, y]], 1.4, FALL.woodDk, 'dry', 0); }
+    paint(rectPts(x0 - 16, y1, x1 - x0 + 32, yb - y1, 1), { wash: FALL.woodDk, ink: PAL.ink, sw: 1.5 });
     boilSeed('D1steps');   // two stone steps down to the yard at the right end
     paint(rectPts(x1 + 10, y1 - 4, 150, 72, 2), { wash: mixCol(FALL.stone, '#E2A882', .25), ink: PAL.ink, sw: 1.4 });
     paint(rectPts(x1 + 70, y1 + 60, 170, 80, 2), { wash: mixCol(FALL.stone, '#D09A7A', .25), ink: PAL.ink, sw: 1.4 });
   }
   // the wet walls: a damp band along the foot of the wall that dries (shrinks) over the shot, and the sunset on the right
   function d1WallLight(t) {
-    const dry = seg(t, tD1, tD2), hgt = lerp(190, 70, dry);
-    boilSeed('D1damp');
-    paint(rectPts(CX - 16 * SC + 6, CY - hgt, 32 * SC - 12, hgt - 4, 4), { fill: '#6E6A80', fillOp: lerp(55, 25, dry), bleed: .3, tex: .4, border: .5, ink: null });
+    const dry = seg(t, tD1, tD2), hgt = lerp(190, 70, dry), xl = CX - 16 * SC + 6, xr = CX + 16 * SC - 6;
+    boilSeed('D1damp');   // a damp stain with a ragged top edge: a flat wash (a fill costs ten times as much)
+    const stain = [[xr, CY - 4], [xl, CY - 4]];
+    for (let i = 0; i <= 14; i++) stain.push([lerp(xl, xr, i / 14), CY - hgt - 16 * Math.sin(i * 1.9 + 1) * (1 - dry * .5) - 12 * hash(i + 90)]);
+    paint(stain, { wash: '#6E6A80', washOp: lerp(62, 26, dry), ink: null, curv: .5 });
     boilSeed('D1walllit');
-    paint(rectPts(CX + 3.9 * SC, CY - 17.7 * SC, 12 * SC - 4, 17.5 * SC, 4), { fill: '#F4A060', fillOp: 85, bleed: .12, tex: .3, border: .5, ink: null });
+    paint(rectPts(CX + 3.9 * SC, CY - 17.7 * SC, 12 * SC - 4, 17.5 * SC, 4), { wash: '#F4A060', washOp: 70, ink: null });
     boilSeed('D1wallshade');
-    paint(rectPts(CX - 16 * SC + 4, CY - 8.6 * SC, 12.3 * SC, 8.5 * SC, 4), { fill: '#A08AA8', fillOp: 55, bleed: .12, tex: .3, border: .5, ink: null });
+    paint(rectPts(CX - 16 * SC + 4, CY - 8.6 * SC, 12.3 * SC, 8.5 * SC, 4), { wash: '#A08AA8', washOp: 48, ink: null });
     boilSeed('D1roofrim');   // the low sun catches the right-hand edge of the roof
     inkLine([[CX + 3 * SC, CY - 30 * SC + 3], [CX + 11 * SC, CY - 23.8 * SC], [CX + 19 * SC, CY - 17.5 * SC - 2]], 3.2, '#FFC47A', 'dry', 0);
   }
   // the lit room behind the open door, so Clawd steps out of warm light
   function doorway(door) {
-    if (door < .25) return;
+    if (door < .06) return;
     const dw = 3.6 * SC, dTop = CY - 11 * SC, x0 = CX - dw + 2 * dw * (1 - ease(Math.min(door, .999)) * .82) + 3;
     const arch = x => dTop - 2.6 * SC * Math.sqrt(Math.max(0, 1 - ((x - CX) / dw) ** 2));
     const P = [[x0, CY - 2], [x0, arch(x0) + 4]];
     for (let i = 1; i < 10; i++) { const x = lerp(x0, CX + dw - 3, i / 10); P.push([x, arch(x) + 4]); }
     P.push([CX + dw - 3, CY - 2]);
     boilSeed('D1room');
-    paint(P, { wash: mixCol('#E39A58', FALL.window, .3), washOp: 255 * seg(door, .25, .6), fill: '#B8603A', fillOp: 70 * seg(door, .25, .6), bleed: .05, tex: .4, ink: null });
-    glow(CX, CY - 5 * SC, 4.5 * SC, FALL.lamp, .5 * seg(door, .25, .8));
+    paint(P, { wash: mixCol('#E39A58', FALL.window, .3), washOp: 255 * seg(door, .06, .3), ink: null });
+    glow(CX, CY - 5 * SC, 4.5 * SC, FALL.lamp, .5 * seg(door, .1, .6));
+  }
+  // the warm room spills out through the open door and across the deck, so Clawd steps out of light
+  function d1Spill(door) {
+    const k = seg(door, .15, .8); if (k <= 0) return;
+    const dw = 3.6 * SC;
+    boilSeed('D1spill');
+    paint([[CX - dw, CY + 4], [CX + dw, CY + 4], [CX + dw + 230, DECK.y1 - 3], [CX - dw - 170, DECK.y1 - 3]], { wash: FALL.lamp, washOp: 78 * k, ink: null });
   }
   // water dripping from the eaves, thinning out as the rain passes
   function drips(t) {
@@ -288,8 +315,30 @@
     tufts(DECK.x1 + 200, 4000, CY + 260, 26, 7, mixCol(FALL.grassDk, PAL.ink, .2), t, 34, [C.x - half, C.x + half]);
   }
 
+  // leaves drifting down and across, each one wash with an ink edge (cheap), culled to the frame: vis = [x0, y0, x1, y1]
+  function driftLeaves(t, o) {
+    const { n, x0, x1, y0, y1, seed, key, vis, size, wind, fall, grow = 1 } = o, hgt = y1 - y0, span = x1 - x0;
+    for (let i = 0; i < n; i++) {
+      const h = j => hash(seed * 131 + i * 17 + j), v = lerp(fall[0], fall[1], h(1)), w = lerp(.9, 1.8, h(3)), ph = h(4) * TAU;
+      const yy = y0 + ((t * v + h(2) * hgt) % hgt + hgt) % hgt, xx = x0 + ((h(5) * span + t * wind + 50 * Math.sin(t * w + ph)) % span + span) % span;
+      if (vis && (xx < vis[0] || xx > vis[2] || yy < vis[1] || yy > vis[3])) continue;
+      boilSeed(key + i);
+      leafW(xx, yy, grow * lerp(size[0], size[1], h(6)), ph + .6 * Math.sin(t * w * .8 + ph), LEAFC[Math.floor(h(7) * LEAFC.length)], Math.cos(t * lerp(1.4, 3, h(8)) + ph));
+    }
+  }
+  // the gust on the surge: leaves lift off the yard and swirl across the frame to the upper right
+  function gust(t) {
+    for (let i = 0; i < 14; i++) {
+      const h = j => hash(i * 19 + j + 900), a = (t - (tJoy - .1 + .6 * h(1))) / (2.4 + 1.2 * h(2));
+      if (a < 0 || a > 1) continue;
+      const x = XP - 500 + 1400 * h(3) + 1000 * a * (.6 + .6 * h(5)) + 80 * Math.sin(a * 8 + i), y = PY + 80 + 260 * h(4) - 760 * easeOut(a) * (.5 + .7 * h(6)) + 90 * Math.sin(a * 6 + i * 2);
+      boilSeed('D1gust' + i);
+      leafW(x, y, 15 + 9 * h(7), i + a * (7 + 6 * h(8)), LEAFC[i % LEAFC.length], Math.cos(a * 11 + i));
+    }
+  }
+
   // ---------- Clawd and the cat in D1 ----------
-  const EMO1 = [[0, 'excited', { lookX: .1, lookY: -.2 }], [tBask, 'hopeful', { lookX: .45, lookY: -.75 }], [tTurnR, 'happy', { lookX: .8 }],
+  const EMO1 = [[0, 'excited', { lookX: .1, lookY: -.2 }], [tBask, 'hopeful', { lookX: .45, lookY: -.75 }], [tCatOut + .5, 'happy', { lookX: -.9, lookY: .45 }], [tTurnR, 'happy', { lookX: .8 }],
     [tWalk1 + .2, 'hopeful', { eyes: 'shine', mouth: 'o', lookX: .9, lookY: -.15 }], [tStar, 'starstruck', { lookX: .45, lookY: -.75, aL: .15, aR: .25 }],
     [tJoy, 'excited', { eyes: 'happy', mouth: 'open' }], [tPlay, 'playful', { lookX: .8, lookY: .5 }]];
   function pose1(t) {
@@ -298,28 +347,32 @@
     let x, y, u;
     if (t < tHop1) {                                                // inside the door, then the hop out onto the porch
       const k = seg(t, tHop0, tHop1), hop = jump(t, tHop0, tHop1, 1.4);
-      x = lerp(CX, CX + 20, ease(k)); y = lerp(CY - 4, PY, easeOut(k)); u = lerp(19, U1, ease(k));
+      x = lerp(CX, XH, ease(k)); y = lerp(CY - 4, PY, easeOut(k)); u = lerp(19, U1, ease(k));
       o.view = 'front'; o.dy = (cl.dy || 0) * .4 + hop.dy; o.sq = (cl.sq || 0) * .5 + hop.sq;
       o.aL = lerp(1.25, .9, k) + .1 * Math.sin(t * 9); o.aR = lerp(1.1, 1.3, k) + .1 * Math.sin(t * 8 + 1);
     } else if (t < tWalk0) {                                        // basking in the light, then a turn to the right
-      x = CX + 20; y = PY; u = U1;
+      x = XH; y = PY; u = U1;
       if (t > tTurnR) Object.assign(o, turn(t, tTurnR, tTurnR + .18, 0, .125));
       o.sq = (cl.sq || 0) + spring(t, tHop1, 7, 17) * .35 - .06 * Math.sin(Math.PI * seg(t, tBask + .2, tBask + 1.4));   // a deep breath of the air
     } else {                                                        // along the porch, then a stop facing the valley
-      const k = seg(t, tWalk0, tWalk1), d = (XP - CX - 20) * ease(k);
-      x = CX + 20 + d; y = PY; u = U1;
+      const k = seg(t, tWalk0, tWalk1), d = (XP - XH) * ease(k);
+      x = XH + d; y = PY; u = U1;
       o.view = 'q';
       if (t < tWalk1) { o.walk = d / (4 * U1); o.dy = (cl.dy || 0) * .3 - .3 * Math.abs(Math.sin(d / (4 * U1) * TAU)); }
       if (t < tBound - .2) {
         // the eyes go up to the rainbow first, then the take
         if (t > tLookUp && t < tStar) { const e = ease(seg(t, tLookUp, tLookUp + .25)); o.lookX = lerp(.9, .5, e); o.lookY = lerp(-.15, -.9, e); o.mouth = 'O'; }
-        // joy: both arms fling up on the surge, not in unison
-        const up = backOut(seg(t, tJoy - .1, tJoy + .22));
-        if (t > tJoy - .1 && t < tPlay + .3) {
+        // the joy: Clawd turns to face front (the arms read best there), both arms fling up in a V, not in unison, and a big hop
+        const j0 = tJoy - .2, j1 = tJoy - .03, p0 = tPlay - .12, p1 = tPlay + .14;
+        if (t >= j0 && t < j1) Object.assign(o, turn(t, j0, j1, .125, 0));
+        else if (t >= j1 && t < p0) Object.assign(o, spinView(0), { smear: 0 });
+        else if (t >= p0 && t < p1) Object.assign(o, turn(t, p0, p1, 0, .125));
+        const up = backOut(seg(t, tJoy - .08, tJoy + .2));
+        if (t > tJoy - .08 && t < tPlay + .3) {
           const d2 = 1 - ease(seg(t, tPlay - .15, tPlay + .3));
-          o.aL = lerp(o.aL ?? .2, 1.5 + .14 * Math.sin(t * 8.5), up * d2); o.aR = lerp(o.aR ?? .2, 1.42 + .14 * Math.sin(t * 8.5 + 1.9), up * d2);
+          o.aL = lerp(o.aL ?? .2, 1.3 + .2 * Math.sin(t * 8.5), up * d2); o.aR = lerp(o.aR ?? .2, 1.18 + .2 * Math.sin(t * 8.5 + 1.9), up * d2);
         }
-        const hop = jump(t, tJoy + .02, tJoy + .5, 1.8), hop2 = jump(t, AT(32, 2), AT(32, 2) + .38, .8);
+        const hop = jump(t, tJoy + .02, tJoy + .52, 2.6), hop2 = jump(t, AT(32, 2), AT(32, 2) + .38, 1.1);
         o.dy = (o.dy || 0) + hop.dy + hop2.dy; o.sq = (o.sq || 0) + hop.sq + hop2.sq;
       } else {
         // crouch, then bound off the porch toward the yard (the cut lands mid-air)
@@ -336,7 +389,7 @@
     if (t < tCatOut) return null;
     const blinkAt = (t0, d) => 1 - Math.sin(Math.PI * seg(t, t0, t0 + d)) * .95;
     if (t < tCatSit) {                                              // trotting out of the door
-      const k = seg(t, tCatOut, tCatSit), x = lerp(CX - 20, CX + 150, ease(k)), y = lerp(CY - 6, PY - 2, easeOut(k)), s = lerp(13.5, 16, k);
+      const k = seg(t, tCatOut, tCatSit), x = lerp(CX - 30, CX + 105, ease(k)), y = lerp(CY - 6, PY - 2, easeOut(k)), s = lerp(13.5, 16, k);
       return { x, y, s, o: { pose: 'walk', walk: (x - CX) / 42, tailUp: .9, tail: .3 * Math.sin(t * 5), ears: .9, pupil: .5, dy: -.12 * Math.abs(Math.sin((x - CX) / 42 * TAU)), boilKey: 'D1cat' } };
     }
     const settle = spring(t, tCatSit, 8, 20) * .9, lookUp = ease(seg(t, AT(31, 3.4), AT(31, 3.8)));
@@ -346,7 +399,7 @@
     const jolt = seg(t, tJoy + .05, tJoy + .15) * (1 - seg(t, tJoy + .6, tJoy + 1));
     if (t > tJoy + .2) look = [lerp(look[0], .95, ease(seg(t, tJoy + .2, tJoy + .5))), lerp(look[1], -.55, ease(seg(t, tJoy + .2, tJoy + .5)))];
     if (t > tBound) look = [1, lerp(-.5, .5, ease(seg(t, tBound, tBound + .4)))];
-    return { x: CX + 150, y: PY - 2, s: 16, o: { pose: 'sit', sy: 1 - .12 * settle - .1 * jolt, sx: 1 + .08 * settle, look, pupil: lerp(.35, .9, jolt), eyes: jolt > .3 ? 'wide' : 'open',
+    return { x: CX + 105, y: PY - 2, s: 16, o: { pose: 'sit', sy: 1 - .12 * settle - .1 * jolt, sx: 1 + .08 * settle, look, pupil: lerp(.35, .9, jolt), eyes: jolt > .3 ? 'wide' : 'open',
       blink: blinkAt(AT(30, 4.1), .6) * blinkAt(AT(32, 2.6), .25), ears: 1 - 1.3 * jolt, tailUp: 1, tail: .5 * Math.sin(t * 2.2) + 1.1 * spring(t, tJoy + .4, 4, 12), boilKey: 'D1cat' } };
   }
 
@@ -359,18 +412,25 @@
     camBegin(C.x, C.y, C.z);
     d1Ground(t, C);
     d1Deck();
-    const door = t < tBurst ? .035 * Math.max(0, Math.sin(Math.PI * seg(t, tRattle, tRattle + .2))) + .03 * Math.max(0, Math.sin(Math.PI * seg(t, tRattle + .22, tRattle + .36)))
-      : 1 - .16 * Math.abs(spring(t, tBurst + .12, 6, 16)) * seg(t, tBurst + .1, tBurst + .12) - .9 * (1 - easeOut(seg(t, tBurst, tBurst + .13)));
+    // da-dum, BANG: the door shakes open twice (anticipation, the light pushing at it), then bursts wide and bounces
+    const rat = (t0, d, a) => a * Math.sin(Math.PI * seg(t, t0, t0 + d));
+    const door = clamp(t < tBurst ? Math.max(rat(tRattle, .15, .36), rat(tRattle + .21, .15, .5))
+      : easeOut(seg(t, tBurst, tBurst + .16)) - .1 * Math.abs(spring(t, tBurst + .16, 7, 18)));
+    d1Spill(door);
     cottage(CX, CY, SC, { door: Math.min(door, .999), lit: .5, wet: lerp(.55, .2, seg(t, tD1, tD2)), key: 'D1cot' });
     d1WallLight(t);
     doorway(door);
     puddles(t);
+    const hv = [W / 2 / C.z + 80, H / 2 / C.z + 80], dl = { x0: CX - 700, x1: CX + 2600, y0: CY - 1300, y1: CY + 230, vis: [C.x - hv[0], C.y - hv[1], C.x + hv[0], C.y + hv[1]] };
+    driftLeaves(t, { ...dl, n: 10, seed: 51, key: 'D1dl0', size: [14, 20], wind: 36, fall: [34, 60], grow: clamp(.9 / C.z, 1, 1.8) });   // leaves behind the characters
     const c = cat1(t), P = pose1(t);
     if (c && t < tCatSit - .6) cat(c.x, c.y, c.s, c.o);            // still in the doorway: behind Clawd
-    if (t > tBurst) clawd(P.x, P.y, P.u, P.o);
+    if (t > tBurst + .04) clawd(P.x, P.y, P.u, P.o);               // Clawd steps into view once the door has swung clear of him
     if (c && t >= tCatSit - .6) cat(c.x, c.y, c.s, c.o);
     d1Sparkle(t, C);
     drips(t);
+    driftLeaves(t, { ...dl, n: 5, seed: 57, key: 'D1dl1', size: [20, 28], wind: 52, fall: [50, 80], grow: clamp(.9 / C.z, 1, 1.8) });   // and in front of them
+    gust(t);
     camEnd();
     if (lt < .7) flash(1 - ease(lt / .7), '#FFE7A8');               // the gold of C1 clears onto the scene
   }
@@ -383,14 +443,16 @@
   const tBack0 = AT(33, 3.4), tBack1 = AT(33, 4.08), tRun = AT(33, 4.35), tLeap = AT(33, 4.66), tImpact = BAR(34);
   const tCatGo = AT(34, 3.05), tCatCrouch = AT(34, 3.95), tPounce = BAR(35), tCatIn = AT(35, 1.5);
   const tPop = BAR(36), tCatPop = BAR(37), tTake = AT(37, 1.6), tLaugh2 = AT(37, 2.2), tTilt = AT(37, 3.2);
-  const tLie = BAR(38), tSet = AT(38, 2.6), tRise = tEnd - 1.5;
+  const tLie = BAR(38), tSet = AT(38, 2.6), tRise = tEnd - 1.5, tPeek0 = AT(34, 3.6), tPeek1 = tPounce - .15;   // the beanie's pom-pom peeks out of the pile while the cat stalks it
   const R2 = { x: 960, y: 540, z: 1 };                       // D2's layers are laid out in the screen coordinates of this camera
   const P_SUN = .1, SUNX = 1265, SUNR2 = 90, sunY = t => lerp(300, 392, ease(seg(t, tD2, tSet)));
   const PILE = { x: 1170, y: 910, w: 610, h: 245 };
   const XL = 500, XB = 395, XR = 785, XIN = 1150;            // landing, backed up, take-off, where Clawd goes in
   const STEP = [165, 852];                                   // the cat's seat on the porch step
   const LEAF2 = [FALL.amber, FALL.rust, FALL.gold, '#E6A03A', FALL.olive];   // no maple red: the red leaf is indoors
-  const LEAFB = [FALL.gold, FALL.amber, '#E6A03A', FALL.rust, '#F2C46A', FALL.amber];
+  const LEAFB = [FALL.rust, FALL.amber, '#C9622A', FALL.gold, FALL.rust, '#E6A03A'];   // darker than the sky, so the burst reads against it
+  const PCOLS = [FALL.amber, '#E6A03A', FALL.rust, FALL.gold, '#C9622A', '#F0B24E'];
+  const CATX = 1395, CATY = 806;                              // where the cat pops out of the pile, right of Clawd
   const bumpK = (t, t0) => t < t0 ? 0 : Math.exp(-4.5 * (t - t0)) * Math.cos(11 * (t - t0));
   const wriggle = t => seg(t, tCatIn + .3, tCatIn + .6) * (1 - seg(t, tPop - .3, tPop));
   function pileShape(t) {
@@ -400,7 +462,7 @@
   }
   const pileTopAt = (x, P = PILE) => { const d = (x - P.x) / (P.w / 2); return Math.abs(d) >= 1 ? null : P.y - P.h * Math.sqrt(1 - d * d) * .97; };
   function cam2(t) {
-    const x = kf(t, [[tD2, 880], [tNotice, 905], [tBack1, 885], [tImpact, 1000], [tImpact + 1.1, 1060], [AT(34, 3.3), 1055], [AT(35, 1), 990], [AT(35, 3.4), 1030],
+    const x = kf(t, [[tD2, 430], [tLand, 490], [tNotice + .25, 640], [tIdea + .35, 745], [tBack1, 800], [tImpact, 1000], [tImpact + 1.1, 1060], [AT(34, 3.3), 1055], [AT(35, 1), 990], [AT(35, 3.4), 1030],
       [tPop + .3, 1110], [AT(36, 3), 1135], [tCatPop, 1150], [tLie, 1160], [AT(38, 2.4), 1150], [tRise, 1150], [tEnd, 1150]]);
     const y = kf(t, [[tD2, 540], [tImpact, 540], [tImpact + 1.1, 395], [AT(34, 3.3), 400], [AT(35, 1), 530], [AT(35, 3.4), 540], [tPop + .3, 560], [AT(36, 3), 575],
       [tCatPop, 578], [tLie, 572], [AT(38, 2.4), 470], [tRise, 462], [tEnd, 150]]);
@@ -417,22 +479,23 @@
     const e = 1 - Math.exp(-L.k * a), sw = L.sway * Math.sin(L.w * a + L.ph) * Math.min(1, a / 1.2);
     return [L.x0 + L.vx / L.k * e + L.wind * a + sw, L.y0 + L.vt * a + (L.vy - L.vt) / L.k * e];
   }
-  function makeBurst(n, seed, x0, y0, spread, vy, vx) {
+  function makeBurst(n, seed, x0, y0, spread, vmax, fan) {
     return [...Array(n)].map((_, i) => {
       const h = j => hash(seed * 131 + i * 17 + j);
-      const L = { x0: x0 + (h(1) - .5) * spread, y0: y0 + h(2) * 30, delay: .05 * h(3), vx: (h(4) - .5) * 2 * vx, vy: -vy * (.5 + .5 * h(5)), k: 2.6 + 1.2 * h(6),
-        vt: 42 + 38 * h(7), sway: 20 + 40 * h(8), w: 1.4 + 1.2 * h(9), ph: h(10) * TAU, s: 22 + 11 * h(11), col: LEAFB[Math.floor(h(12) * LEAFB.length)],
-        spin: 2.5 + 3.5 * h(13), rest: (h(14) - .35) * 55, wind: 10 * (h(15) - .3) };
+      const th = (h(4) + h(5) - 1) * fan, v = vmax * (.35 + .65 * h(6));    // angle from straight up (most leaves go nearly up), and speed
+      const L = { x0: x0 + (h(1) - .5) * spread, y0: y0 + h(2) * 24, delay: .06 * h(3), vx: v * Math.sin(th), vy: -v * Math.cos(th), k: 2.6 + 1.2 * h(7),
+        vt: 42 + 38 * h(8), sway: 20 + 40 * h(9), w: 1.4 + 1.2 * h(10), ph: h(11) * TAU, s: 26 + 12 * h(12), col: LEAFB[Math.floor(h(13) * LEAFB.length)],
+        spin: 2.5 + 3.5 * h(14), rest: (h(15) - .35) * 55, wind: 8 * (h(16) - .4) };
       L.land = 40;
       for (let a = .3; a < 40; a += .04) {
-        const p = burstPos(L, a), top = pileTopAt(p[0]), g = top != null ? top + 6 + 8 * h(16) : G2 + L.rest;
+        const p = burstPos(L, a), top = pileTopAt(p[0]), g = top != null ? top + 6 + 8 * h(17) : G2 + L.rest;
         if (burstPos(L, a + .04)[1] > p[1] && p[1] >= g) { L.land = a; break; }
       }
       return L;
     });
   }
-  const BURSTS = [[tImpact, makeBurst(40, 1, PILE.x - 40, PILE.y - PILE.h + 30, 300, 1550, 900)], [tCatIn, makeBurst(10, 2, 1110, 770, 120, 950, 360)],
-    [tPop, makeBurst(8, 3, XIN, 650, 170, 820, 380)], [tCatPop + .05, makeBurst(5, 4, 1330, 735, 80, 620, 260)]];
+  const BURSTS = [[tImpact, makeBurst(40, 1, XIN - 10, PILE.y - PILE.h + 44, 190, 1900, 1.35)], [tCatIn, makeBurst(10, 2, 1110, 770, 120, 900, 1.1)],
+    [tPop, makeBurst(8, 3, XIN, 650, 170, 820, .9)], [tCatPop + .05, makeBurst(5, 4, CATX, 745, 80, 620, .8)]];
   function bursts(t) {
     BURSTS.forEach(([t0, B], bi) => B.forEach((L, i) => {
       const a = t - t0 - L.delay; if (a <= 0) return;
@@ -440,6 +503,7 @@
       if (a < L.land) {
         const [x, y] = burstPos(L, a), sp = Math.exp(-1.2 * a);
         leafW(x, y, L.s, L.ph + L.spin * a * (.35 + .65 * sp) + .5 * Math.sin(L.w * a), L.col, Math.cos(a * L.spin * .8 + L.ph));
+        if (i % 4 === 0 && a > .9) glint(x + 7, y - 5, 13, t, L.ph, 'D2bg' + bi + '_' + i, 1.1 + (i % 3) * .35);   // the hanging leaves catch the light
       } else {
         const [x, y] = burstPos(L, L.land), k = seg(a, L.land, L.land + .25);
         leafW(x, y, L.s, L.ph + L.spin * L.land * .4, L.col, lerp(Math.cos(L.land * L.spin * .8 + L.ph), .9, k), lerp(1, .5, k));
@@ -456,7 +520,7 @@
     return P;
   })();
   function d2Sky(t) {
-    skyBlend('sunset', 'dusk', lerp(.04, .3, seg(t, tD2, tEnd)), { key: 'D2sky', x0: -120, y0: -250, w: 2200, h: 860 });
+    skyLite('sunset', 'dusk', lerp(.04, .3, seg(t, tD2, tEnd)), { key: 'D2sky', x0: -120, y0: -250, w: 2200, h: 860 });
     cloudBank(t, { key: 'D2cl', n: 3, x0: -200, x1: 2200, y: 120, seed: 14, lift: 5, t0: tD1, sc: .95, op: lerp(.75, .45, seg(t, tD2, tEnd)), near: [SUNX, 360] });
   }
   function d2Hills(t) {
@@ -467,11 +531,10 @@
       paint([[SUNX + Math.cos(a) * 60, sy + Math.sin(a) * 60], [SUNX + Math.cos(a + w / len) * len, sy + Math.sin(a + w / len) * len], [SUNX + Math.cos(a - w / len) * len, sy + Math.sin(a - w / len) * len]],
         { wash: '#FFE8B8', washOp: 38 + 16 * Math.sin(t * .9 + i * 2), ink: null });
     }
-    sunDisc(SUNX, sy, SUNR2, 'D2sun');
+    sunDisc(SUNX, sy, SUNR2, 'D2sun', 1, ease(seg(t, tD2, tEnd)));   // the disc warms from cream to the lamp's gold as it sets
     boilSeed('D2ridge');
-    paint(ridge2, { wash: '#B08C9E', fill: '#957488', fillOp: 45, bleed: .04, tex: .3, border: .1, ink: null });
-    inkLine(ridge2.slice(2).filter(p => Math.abs(p[0] - SUNX) < 650), 1.8, '#FFC98A', 'dry', .5);
-    glow(SUNX, sy + SUNR2, 240, '#FFB060', .6 * seg(t, tD2 + 4, tSet));   // the hills glow where the sun is going down
+    paint(ridge2, { wash: '#B08C9E', ink: null });
+    inkLine(ridge2.slice(2).filter(p => Math.abs(p[0] - SUNX) < 650), 1.2, '#FFC98A', 'dry', .5);   // the rim of light on the hills (its glow would band against the disc, so it is only a line)
   }
   function d2Valley(t) {
     boilSeed('D2v ridge');
@@ -482,26 +545,26 @@
     boilSeed('D2v stream');
     paint(ribbon([[-300, 668], [300, 652], [800, 676], [1300, 660], [1800, 684], [2400, 666]], 16, 26), { wash: '#F8CFA2', ink: null });
     const tc = (a, b, c) => [a, b, c, a, mixCol(FALL.bark, '#8E5A6A', .3)];
-    [[1040, 640, 3.6, tc(FALL.rust, FALL.amber, FALL.gold)], [1880, 650, 4.2, tc(FALL.amber, FALL.gold, FALL.rust)], [2120, 640, 3.4, tc(FALL.gold, FALL.rust, FALL.amber)]]
+    [[1230, 640, 3.6, tc(FALL.rust, FALL.amber, FALL.gold)], [1880, 650, 4.2, tc(FALL.amber, FALL.gold, FALL.rust)], [2120, 640, 3.4, tc(FALL.gold, FALL.rust, FALL.amber)]]
       .forEach(([x, y, s, c], i) => farTree(x, y, s, c, 'D2ft' + i, .15 * Math.sin(t * .7 + i)));
     for (let i = 0; i < 6; i++) glint(1000 + 170 * i + 50 * hash(i + 40), 664 + 10 * Math.sin(i * 2.3), 8, t, hash(i * 7 + 2) * TAU, 'D2vg' + i, 1.3 + .5 * hash(i));
   }
   function d2Wall(t) {   // a low dry-stone wall along the back of the yard
     boilSeed('D2wall');
-    paint(through([[-600, 742], [-600, 694], [300, 688], [1100, 694], [2000, 686], [2600, 692], [2600, 742]], 3), { wash: mixCol(FALL.stone, '#C98A7A', .3), fill: '#7E6A68', fillOp: 60, bleed: .03, tex: .7, border: .2, ink: PAL.ink, sw: 1 });
-    for (let i = 0; i < 26; i++) { const x = -560 + i * 120 + 40 * hash(i + 60), y = 706 + 18 * hash(i + 61); inkLine([[x, y], [x + 30 + 30 * hash(i + 62), y - 4], [x + 70 + 20 * hash(i + 63), y + 2]], .8, mixCol(PAL.ink, FALL.stone, .35), 'inkfine', .6); }
+    paint(through([[-1200, 742], [-1200, 694], [300, 688], [1100, 694], [2000, 686], [2600, 692], [2600, 742]], 3), { wash: mixCol(FALL.stone, '#C98A7A', .3), ink: PAL.ink, sw: 1 });
+    for (let i = 0; i < 31; i++) { const x = -1160 + i * 120 + 40 * hash(i + 60), y = 706 + 18 * hash(i + 61); inkLine([[x, y], [x + 30 + 30 * hash(i + 62), y - 4], [x + 70 + 20 * hash(i + 63), y + 2]], .8, mixCol(PAL.ink, FALL.stone, .35), 'inkfine', .6); }
     boilSeed('D2wall lit');
-    inkLine([[-600, 692], [300, 686], [1100, 692], [2000, 684], [2600, 690]], 2.2, '#FFC98A', 'dry', .5);
+    inkLine([[-1200, 692], [300, 686], [1100, 692], [2000, 684], [2600, 690]], 2.2, '#FFC98A', 'dry', .5);
   }
   function d2Yard(t, C) {
     boilSeed('D2ground');
-    paint(rectPts(-300, 728, 2650, 560), { wash: mixCol(FALL.grass, '#D69A62', .25), fill: FALL.grassDk, fillOp: 60, bleed: .02, tex: .6, border: .15, ink: null });
+    paint(rectPts(-1000, 728, 3350, 560), { wash: mixCol(FALL.grass, '#D69A62', .25), ink: null });
     boilSeed('D2ground lit');
-    paint(ellPts(1350, 800, 900, 70, 24, 6), { fill: '#F2B66A', fillOp: 60, bleed: .15, tex: .3, border: .3, ink: null });
+    paint(ellPts(1350, 800, 900, 70, 24, 6), { wash: '#F2B66A', washOp: 55, ink: null });
     // the porch at the far left: the corner of the deck and two stone steps down into the yard
     boilSeed('D2porch');
-    paint([[-300, 640], [150, 640], [160, 740], [-300, 740]], { wash: mixCol(FALL.wood, '#E2A06A', .3), ink: PAL.ink, sw: 1.4 });
-    paint(rectPts(-300, 740, 470, 44, 1), { wash: FALL.woodDk, ink: PAL.ink, sw: 1.4 });
+    paint([[-1000, 640], [150, 640], [160, 740], [-1000, 740]], { wash: mixCol(FALL.wood, '#E2A06A', .3), ink: PAL.ink, sw: 1.4 });
+    paint(rectPts(-1000, 740, 1170, 44, 1), { wash: FALL.woodDk, ink: PAL.ink, sw: 1.4 });
     paint(rectPts(40, 784, 220, 70, 2), { wash: mixCol(FALL.stone, '#E2A882', .25), ink: PAL.ink, sw: 1.4 });
     paint(rectPts(80, 852, 240, 62, 2), { wash: mixCol(FALL.stone, '#D09A7A', .25), ink: PAL.ink, sw: 1.4 });
     // puddles catching the sky
@@ -512,7 +575,7 @@
       glint(x - rx * .3, y - ry * .1, 13, t, i * 2.1 + 1, 'D2pg' + i, 2);
     });
     // the maple, and the rake leaning on it
-    maple(680, 872, 19, { key: 'D2maple', seed: 3, cols: [FALL.amber, FALL.gold, FALL.rust, '#E07A2E'], sway: .35 * Math.sin(t * .8) + .5 * bumpK(t, tImpact) });
+    mapleLite(680, 872, 19, { key: 'D2maple', seed: 3, cols: [FALL.amber, FALL.gold, FALL.rust, '#E07A2E'], sway: .35 * Math.sin(t * .8) + .5 * bumpK(t, tImpact) });
     boilSeed('D2rake');
     inkLine([[600, 900], [668, 700], [712, 572]], 3.2, FALL.wood, 'ink', 0);
     push(); translate(718, 556); rotate(.33);
@@ -521,10 +584,43 @@
     pop();
   }
 
+  // lib's maple() with 3 watercolour fills instead of 10 (the upper crown masses are flat washes under the leaf dabs)
+  function mapleLite(x, y, s, o = {}) {
+    const key = o.key || 'maple', seed = o.seed ?? 1, cols = o.cols, sway = o.sway ?? 0;
+    boilSeed(key + ' trunk');
+    paint(ribbon([[x, y], [x - s * .3, y - s * 8], [x + s * .5, y - s * 15]], s * 2.4, s * 1.2), { wash: FALL.bark, ink: PAL.ink, sw: clamp(s / 14, .5, 1.6) });
+    for (const [bx, by, ex, ey] of [[0, -11, -6, -17], [.3, -13, 6, -19], [.2, -9, 5, -12]])
+      inkLine([[x + bx * s, y + by * s], [x + (bx + ex) * .5 * s, y + (by + ey) * .5 * s - s], [x + ex * s, y + ey * s]], clamp(s / 8, .6, 3), FALL.barkDk, 'ink', .5);
+    [[-7, -15, 7, 5.5], [7, -15.5, 7, 5.5], [0, -14, 8.5, 5.5], [-8.5, -20, 6.5, 5.2], [8.5, -20.5, 6.5, 5.2], [0, -21, 9.5, 6.5],
+      [-4.5, -26, 6.8, 4.8], [4.5, -26.5, 6.8, 4.8], [0, -29.5, 5.5, 3.6]].forEach(([bx, by, rx, ry], i) => {
+      boilSeed(key + ' crown' + i);
+      const sx = sway * Math.sin(i * 1.7 + seed) * s * .25, c = cols[(i + seed) % cols.length], low = clamp((by + 30) / 16);
+      paint(ellPts(x + bx * s + sx, y + by * s, rx * s, ry * s, 26, s * .6, hash(i + seed) * 3),
+        { wash: mixCol(c, FALL.crimson, .3 * low), washOp: 255, fill: by > -17 ? mixCol(c, FALL.crimson, .55 * low) : undefined, fillOp: 130, bleed: .2, tex: .85, border: .7, ink: null });
+    });
+    boilSeed(key + ' dabs');
+    for (let i = 0; i < 46; i++) {
+      const a = hash(i * 3.1 + seed) * TAU, r = Math.sqrt(hash(i * 5.7 + seed)), dx = Math.cos(a) * r * 12.5, dy = -20.5 + Math.sin(a) * r * 9.5;
+      const sx = sway * Math.sin(i * .9 + seed) * s * .2, c = cols[i % cols.length];
+      paint(ellPts(x + dx * s + sx, y + dy * s, s * .75, s * .5, 8, s * .1, a), { wash: mixCol(c, '#FFE2A0', .25 * (1 - r)), washOp: 235, ink: null });
+    }
+  }
+  // the pile: a dome of overlapping wash leaves (no outlines: cheap) with a ragged ring of outlined leaves along its edge
+  function leafPile(S) {
+    const { x, y, w, h } = S, P = [];
+    for (let i = 0; i <= 18; i++) { const a = Math.PI * i / 18; P.push([x - Math.cos(a) * w / 2, y - Math.sin(a) * h * (1 + .07 * Math.sin(i * 2.3 + 1))]); }
+    boilSeed('D2pile base');
+    paint(P, { wash: '#B2542A', ink: PAL.ink, sw: 1.2 });
+    for (let i = 0; i < 90; i++) {
+      const a = Math.PI * (.03 + .94 * hash(i * 3.3 + 1)), r = Math.sqrt(hash(i * 5.1 + 2)) * .97;
+      boilSeed('D2pl' + i);
+      leafW(x - Math.cos(a) * w / 2 * r, y - Math.sin(a) * h * r * .95 + 10, 17 + 10 * hash(i + 9), hash(i * 7) * TAU, PCOLS[i % PCOLS.length], .65 + .35 * hash(i * 11), .85, null);
+    }
+  }
   // ---------- Clawd in D2 ----------
   const EMO2 = [[0, 'excited', { eyes: 'happy', mouth: 'open', emote: null }], [tNotice, 'neutral', { eyes: 'look', lookX: 1, lookY: .25 }], [tIdea, 'idea', { lookX: .8, lookY: -.2 }],
     [tMisch, 'mischief', { lookX: 1, lookY: .1 }], [tBack1, 'determined', { lookX: 1 }], [tPop, 'laugh'], [tTake, 'surprised', { lookX: .95, lookY: .1, emote: null }],
-    [tLaugh2, 'laugh', { lookX: .6 }], [tLie, 'hopeful', { lookX: .5, lookY: -.9 }]];
+    [tLaugh2, 'laugh', { lookX: .6 }], [tLie, 'hopeful', { lookX: .85, lookY: -.9 }]];
   const beanieLeaves = (u, sw) => {   // leaves stuck on the beanie after the dive (body-local, front view)
     [[-1.9, -10.3, -.7, .95, FALL.gold], [1.7, -10.7, .6, .85, FALL.amber], [.5, -9.2, 2.4, .75, FALL.rust]].forEach(([lx, ly, r, s, c]) => leafW(lx * u, ly * u, s * u, r, c, .8));
   };
@@ -533,7 +629,7 @@
     const o = { ...cl, hat: 'beanie', boilKey: 'D2clawd' };
     let x, behind = false;
     if (t < tLand) {                                                 // still in the air from the porch
-      const k = seg(t, tD2 - .42, tLand), p = arcPt([150, 690], [XL, G2], 120, k);
+      const k = seg(t, tD2 - .42, tLand), p = arcPt([190, 720], [XL, G2], 100, k);
       x = p[0]; o.dy = (p[1] - G2) / U2; o.view = 'q'; o.aL = 1.2 + .1 * Math.sin(t * 9); o.aR = .95; o.sq = -.14; o.rot = .1; o.noShadow = false;
     } else if (t < tBack0) {                                         // landed; the eyes find the pile; the idea
       x = XL; o.view = 'q';
@@ -554,12 +650,16 @@
       const k = seg(t, tLeap, tImpact), p = arcPt([XR, G2], [XIN, G2 - 150], 170, k);
       x = p[0]; o.dy = (p[1] - G2) / U2; o.view = 'side'; o.rot = lerp(.05, .75, k); o.sq = -.24 * Math.sin(Math.PI * clamp(k * 1.1)); o.aL = 1.3;
       o.smear = .35 * (1 - k); o.smearDir = 1; o.noShadow = true; behind = k > .82;
-    } else if (t < tPop - .05) return null;                          // under the leaves
-    else {                                                           // pops out laughing; later lies back to watch the sun
+    } else if (t < tPop - .05) {                                     // under the leaves; once, the beanie's pom-pom pops up like a periscope
+      if (!(t >= tPeek0 && t < tPeek1)) return null;
+      const pk = t - tPeek0, up = backOut(seg(t, tPeek0, tPeek0 + .3)) * (1 - easeIn(seg(t, tPeek1 - .2, tPeek1)));
+      x = XIN - 40 + 55 * Math.sin(pk * 3.2); behind = true; o.view = 'front'; o.noShadow = true; o.sq = 0;
+      o.dy = lerp(2.6, -1.95, up) + .12 * Math.sin(pk * 9); o.rot = .12 * Math.sin(pk * 5 + 1);
+    } else {                                                           // pops out laughing; later lies back to watch the sun
       x = XIN; behind = true; o.view = 'front'; o.noShadow = true;
       const up = backOut(seg(t, tPop - .05, tPop + .3)), lie = ease(seg(t, tLie, tLie + .9));
       o.dy = lerp(1.5, -7.1, up) + (cl.dy || 0) * .5 + 1.1 * lie; o.sq = (cl.sq || 0) - .12 * spring(t, tPop + .2, 6, 16);
-      o.rot = (cl.rot || 0) * (1 - lie) - .36 * lie;
+      o.rot = (cl.rot || 0) * (1 - lie) + .3 * lie;   // leans back toward the sun
       if (t > tLaugh2 && t < tLie) o.aR = lerp(o.aR ?? .2, .9 + .08 * Math.sin(t * 12), ease(seg(t, tLaugh2, tLaugh2 + .25)));   // pointing at the cat's hat
       if (t > tLie) { o.aL = lerp(o.aL ?? .2, -.5, lie); o.aR = lerp(o.aR ?? .2, -.35, lie); }
       o.draw = beanieLeaves;
@@ -594,12 +694,12 @@
     if (t < tCatPop - .05) return null;
     if (t < tLie - .1) {                                             // pops out of the pile wearing a leaf
       const up = backOut(seg(t, tCatPop - .05, tCatPop + .3)), tilt = Math.sin(Math.PI * seg(t, tTilt, tTilt + 1.3));
-      return { x: 1330, y: 775, front: false, hat: true, o: { pose: 'sit', dy: lerp(2.4, -.3, up), eyes: 'half', ears: .35, look: [-.85, .05], blink: blinkAt(AT(37, 2.55), .5), pupil: .3,
+      return { x: CATX, y: CATY, front: false, hat: true, o: { pose: 'sit', dy: lerp(2.4, -.3, up), eyes: 'half', ears: .35, look: [-.85, .05], blink: blinkAt(AT(37, 2.55), .5), pupil: .3,
         rot: .16 * tilt, noShadow: true, boilKey: 'D2cat' } };
     }
     const k = seg(t, tLie - .1, tLie + .35);                          // hops up onto the top and settles down to watch the sun
-    if (k < 1) { const p = arcPt([1330, 775 - .3 * CS2], [1315, 742], 40, k); return { x: p[0], y: p[1], front: k > .5, hat: true, o: { pose: 'sit', eyes: 'open', ears: .8, look: [.4, -.6], noShadow: true, sy: 1 - .1 * Math.sin(Math.PI * k), boilKey: 'D2cat' } }; }
-    return { x: 1315, y: 742, front: true, hat: true, o: { pose: 'loaf', eyes: t > tSet ? 'half' : 'open', look: [.5, -.7], ears: .7, blink: blinkAt(AT(38, 3.3), .7), sy: 1 - .1 * spring(t, tLie + .35, 6, 14), tail: .4 * Math.sin(t * 1.5), boilKey: 'D2cat' } };
+    if (k < 1) { const p = arcPt([CATX, CATY - .3 * CS2], [1385, 744], 40, k); return { x: p[0], y: p[1], front: k > .5, hat: true, o: { pose: 'sit', eyes: 'open', ears: .8, look: [.4, -.6], noShadow: true, sy: 1 - .1 * Math.sin(Math.PI * k), boilKey: 'D2cat' } }; }
+    return { x: 1385, y: 744, front: true, hat: true, o: { pose: 'loaf', eyes: t > tSet ? 'half' : 'open', look: [.5, -.7], ears: .7, blink: blinkAt(AT(38, 3.3), .7), sy: 1 - .1 * spring(t, tLie + .35, 6, 14), tail: .4 * Math.sin(t * 1.5), boilKey: 'D2cat' } };
   }
   function drawCat2(c) {
     cat(c.x, c.y, CS2, c.o);
@@ -611,6 +711,13 @@
   }
   // wriggles under the leaves while both are inside: two bumps chase about under the surface
   function pileBumps(t, P) {
+    const hv = seg(t, tCatPop - .55, tCatPop - .05) * (1 - seg(t, tCatPop - .05, tCatPop + .2));   // the pile heaves where the cat is about to come out
+    if (hv > 0) {
+      const top = pileTopAt(CATX, P) ?? P.y;
+      boilSeed('D2hump');
+      paint(ellPts(CATX, top + 8, 52, 8 + 26 * hv, 16, 1), { wash: '#B2542A', ink: PAL.ink, sw: .9 });
+      leafW(CATX - 18, top - 26 * hv + 10, 15, t * 2, LEAF2[1], .8); leafW(CATX + 16, top - 26 * hv + 14, 13, -t * 2, LEAF2[3], .7);
+    }
     const w = wriggle(t); if (w <= 0) return;
     for (let i = 0; i < 2; i++) {
       const bx = P.x + 150 * Math.sin(t * 2.1 + i * 2.6), top = pileTopAt(bx, P) ?? P.y, hh = w * (18 + 14 * Math.abs(Math.sin(t * 3.3 + i * 1.7)));
@@ -619,12 +726,13 @@
       leafW(bx - 22, top - hh + 8, 15, t * 2 + i, LEAF2[i], .8); leafW(bx + 18, top - hh + 12, 13, -t * 2 + i, LEAF2[i + 2], .7);
     }
   }
-  // loose leaves along the top of the pile, drawn over whoever is sticking out of it
+  // outlined leaves along the dome's edge, drawn over whoever is sticking out of it: they make the silhouette ragged and leafy
   function pileRim(t, P) {
-    for (let i = 0; i < 9; i++) {
-      const x = P.x - 230 + i * 57 + 10 * hash(i + 80), top = pileTopAt(x, P); if (top == null) continue;
+    const N = 19;
+    for (let i = 0; i < N; i++) {
+      const a = Math.PI * (i + .25 + .5 * hash(i + 80)) / N, x = P.x - Math.cos(a) * P.w / 2 * .985, y = P.y - Math.sin(a) * P.h * .985;
       boilSeed('D2rim' + i);
-      leafW(x, top + 8 + 6 * hash(i + 81), 16 + 5 * hash(i + 82), hash(i + 83) * TAU + .15 * Math.sin(t * 3 + i) * wriggle(t), LEAF2[i % LEAF2.length], .7 + .3 * hash(i + 84));
+      leafW(x, y + 7, 15 + 7 * hash(i + 82), a - Math.PI / 2 + .9 * (hash(i + 83) - .5) + .12 * Math.sin(t * 3 + i) * wriggle(t), PCOLS[i % PCOLS.length], .65 + .35 * hash(i + 84));
     }
   }
 
@@ -641,21 +749,21 @@
     inL(C, R2, .7, () => d2Wall(t), false);
     inL(C, R2, 1, () => {
       d2Yard(t, C);
-      leafField(t, { key: 'D2lf0', n: 4, seed: 31, x0: 380, x1: 1100, y0: 150, y1: 980, size: [11, 15], fall: [40, 70], cols: LEAF2, wind: 8, sway: 50 });
+      driftLeaves(t, { key: 'D2lf0', n: 5, seed: 31, x0: 380, x1: 1100, y0: 150, y1: 980, size: [11, 15], fall: [40, 70], wind: 8 });
       const c = cat2(t), P = pose2(t), S = pileShape(t);
       if (c && !c.front) drawCat2(c);
       if (P && P.behind) clawd(P.x, G2, U2, P.o);
-      boilSeed('D2pilebase');
-      pile(S.x, S.y, S.w, S.h, { key: 'D2pile', n: 5, leaf: 16, cols: LEAF2 });
+      leafPile(S);
       pileBumps(t, S);
       pileRim(t, S);
       if (c && c.front) drawCat2(c);
       if (P && !P.behind) clawd(P.x, G2, U2, P.o);
+      if (t > tImpact && t < tImpact + .6) glow(XIN, PILE.y - PILE.h * .8, 360, '#FFD49A', .75 * Math.exp(-9 * (t - tImpact)));   // a flare of light as he hits
       bursts(t);
     }, false);
     inL(C, R2, 1.25, () => {
-      leafField(t, { key: 'D2lf1', n: 3, seed: 37, x0: 0, x1: 2200, y0: -300, y1: 1300, size: [16, 19], fall: [70, 105], cols: LEAF2, wind: 14 });
-      tufts(-400, 2400, 1085, 30, 41, mixCol(FALL.grassDk, PAL.ink, .3), t, 42);
+      driftLeaves(t, { key: 'D2lf1', n: 4, seed: 37, x0: 0, x1: 2200, y0: -300, y1: 1300, size: [16, 20], fall: [70, 105], wind: 14 });
+      tufts(-1100, 2400, 1085, 34, 41, mixCol(FALL.grassDk, PAL.ink, .3), t, 42);
     }, false);
     pop();
   }

@@ -7,9 +7,15 @@
 //   B2  BAR(17) → BAR(21)  eyeline-match cut to a low angle up the tree: tiptoe (bar 17), hop and brush (bar 18), crouch,
 //                          jump and grab on AT(19, 3); a proud landing; clouds cover the sun; a raindrop hits Clawd's nose
 //                          on bar 20; Clawd looks up and the camera tilts up into grey cloud.
-//   B3  BAR(21) → BAR(25)  tilt down out of the same cloud into rain: the soaked cat; Clawd scoops it into the basket and
-//                          the red leaf lands on its head; the run along the lane to the lit cottage; in at the door on
-//                          bar 24, and it shuts. Out: brushWipe in door wood, first half.
+//   B3  BAR(21) → BAR(25)  tilt down out of the same cloud into rain, and the colours drain to blue-grey (bar 21); the soaked
+//                          cat shakes and Clawd tosses the perfect apple into the basket; Clawd lifts the basket to the cat,
+//                          the cat hops in, and the red leaf flips up onto its head like an umbrella (bar 22, the camera
+//                          pushes in); Clawd turns and runs right along the puddled lane, the camera pulls back and the lit
+//                          cottage slides in ahead (bar 23); he stops at the door on bar 24, it swings open onto warm light,
+//                          he turns away and goes in with the basket and cat, and the door thunks shut on beat 4. Out: a
+//                          brushWipe in door wood, first half, in the last .3 s.
+//   Seams   In: whip(p) with p .5 → 1 over the first .35 s (chapter A ends with p → .5). Out: brushWipe(p, [woodDk, wood]),
+//           p 0 → .5 over the last .3 s, fully covered at BAR(25).
 (() => {
   const T13 = BAR(13), T14 = BAR(14), T15 = BAR(15), T16 = BAR(16), T17 = BAR(17), T18 = BAR(18), T19 = BAR(19);
   const T20 = BAR(20), T21 = BAR(21), T22 = BAR(22), T23 = BAR(23), T24 = BAR(24), T25 = BAR(25);
@@ -32,6 +38,7 @@
   }
   const stemAt = (P, s, r) => [P[0] + .95 * s * Math.sin(r), P[1] - .95 * s * Math.cos(r)];   // a leaf held by its stem
   const visX = (C, p, pad = 80) => { const c = C.rx + (C.x - C.rx) * p, h = W / 2 / C.z + pad; return [c - h, c + h]; };
+  const visY = (C, p, pad = 80) => { const c = C.ry + (C.y - C.ry) * p + (C.ty || 0), h = H / 2 / C.z + pad; return [c - h, c + h]; };
   function tufts(x0, x1, y, n, seed, col, t, wind = 0, h = 26, vis = null) {
     for (let i = 0; i < n; i++) {
       const x = lerp(x0, x1, (i + hash(i * 3.7 + seed)) / n); if (vis && (x < vis[0] || x > vis[1])) continue;
@@ -43,7 +50,7 @@
   // A sky like lib's skyBlend() (the same anchors, crossfaded in RGB), in 6 bands over just the visible part of the layer,
   // which halves its cost. v = [x0, x1] visible in this layer, y0..y1 the part of the sky to cover.
   function skyCheap(a, b, k, v, y0, y1, key) {
-    const A = SKIES[a].map((c, i) => mixCol(c, SKIES[b][i], clamp(k))), n = 6, h = y1 - y0, x0 = v[0] - 60, w = v[1] - v[0] + 120;
+    const A = SKIES[a].map((c, i) => mixCol(c, SKIES[b][i], clamp(k))), n = 4, h = y1 - y0, x0 = v[0] - 60, w = v[1] - v[0] + 120;
     const cols = [...Array(n)].map((_, i) => { const x = i / (n - 1) * 3, j = Math.min(Math.floor(x), 2); return mixCol(A[j], A[j + 1], x - j); });
     boilSeed(key);
     paint(rectPts(x0, y0, w, h), { wash: cols[0], ink: null });
@@ -119,8 +126,9 @@
   // a far slope planted in rows of little apple trees (the orchard climbing the hill behind)
   function orchardSlope(t, tone, key, x0 = -600, x1 = 3000, vis = [-1e9, 1e9]) {
     const hill = x => 700 - .1 * (x - x0) - 40 * Math.sin(x * .002 + 1);
-    const P = [[x1, 1600], [x0, 1600]];
-    for (let i = 0; i <= 24; i++) { const x = lerp(x0, x1, i / 24); P.push([x, hill(x)]); }
+    const a = Math.max(x0, Math.floor((vis[0] - 200) / 200) * 200), b = Math.min(x1, Math.ceil((vis[1] + 200) / 200) * 200), n = Math.max(2, Math.round((b - a) / 190));
+    const P = [[b, 1600], [a, 1600]];
+    for (let i = 0; i <= n; i++) { const x = lerp(a, b, i / n); P.push([x, hill(x)]); }
     boilSeed(key + ' hill');
     paint(P, { wash: tone('#C9B36A'), fill: tone('#A89A52'), fillOp: 60, bleed: .04, tex: .4, border: .1, ink: null, curv: .5 });
     [[40, 11, 150], [95, 14, 185], [160, 17, 225]].forEach(([dy, s, gap], row) => {
@@ -416,13 +424,15 @@
     const cl = emotions(t, EMO2, { take: .8 });
     const o = { ...cl, view: 'front', hat: 'beanie', boilKey: 'B2clawd' };
     const tip = ease(seg(t, tTip0, tTip1)) * (1 - ease(seg(t, tTipEnd, tSag + .1)));
+    // the first try: it keeps stretching, in small extra pushes that do not get there
+    const pushK = tip * [AT(17, 2.1), AT(17, 3)].reduce((a, p) => a + Math.max(0, easeOut(seg(t, p - .12, p + .06)) - ease(seg(t, p + .1, p + .45))), 0);
     const hop = jump(t, tHop0, tHop1, 4.3), big = jump(t, tLaunch, tLand2, 5.5);
     const crouch = ease(seg(t, tCr0, tLaunch - .08)) * (1 - seg(t, tLaunch - .08, tLaunch));
     const inAir = (t > tHop0 && t < tHop1) || (t > tLaunch && t < tLand2);
     const reach = Math.max(tip, inAir ? 1 : 0, ease(seg(t, tRe, tHop0)) * (t < tHop1 ? 1 : 0));
-    o.dy = (cl.dy || 0) * (1 - reach) - .3 * tip + hop.dy + big.dy + .25 * crouch;
-    o.sq = (cl.sq || 0) * (1 - reach) - .16 * tip + hop.sq + big.sq + .3 * crouch - .1 * Math.sin(Math.PI * seg(t, tHop0, tHop1)) - .14 * Math.sin(Math.PI * seg(t, tLaunch, tLand2));
-    o.dx = .05 * Math.sin(t * 38) * tip;
+    o.dy = (cl.dy || 0) * (1 - reach) - .6 * tip - .4 * pushK + hop.dy + big.dy + .25 * crouch;
+    o.sq = (cl.sq || 0) * (1 - reach) - .2 * tip - .12 * pushK + hop.sq + big.sq + .3 * crouch - .1 * Math.sin(Math.PI * seg(t, tHop0, tHop1)) - .14 * Math.sin(Math.PI * seg(t, tLaunch, tLand2));
+    o.dx = .08 * Math.sin(t * 34) * tip; o.rot = (cl.rot || 0) * (1 - reach) + .05 * Math.sin(t * 6.5) * tip;   // balancing on its toes
     let aR = lerp(cl.aR ?? .2, 1.5, reach), aL = lerp(cl.aL ?? .2, 1.25, reach);
     aR = lerp(aR, -.9, crouch); aL = lerp(aL, -.9, crouch);
     if (t > tGrab2) { aR = lerp(1.5, 1.2, ease(seg(t, tGrab2, tProud))); aL = lerp(1.4, cl.aL ?? -.9, ease(seg(t, tGrab2 + .2, tProud + .3))); }
@@ -441,16 +451,26 @@
     return { x: hx, y: hy - 6, rot: .2, twig: false };
   }
   // the grey deck of cloud that the camera tilts up into (B2) and down out of (B3): the same painting in both shots
-  function greyDeck(t, base, key) {
+  function greyDeck(t, base, key, V) {   // V = [x0, x1, y0, y1]: the part of the layer that is on screen (everything else is skipped)
+    const on = (x, y, rx, ry) => !V || (x + rx > V[0] && x - rx < V[1] && y + ry > V[2] && y - ry < V[3]);
+    const top = V ? Math.max(-3200, V[2] - 100) : -3200;
     boilSeed(key + ' deck');
-    paint(rectPts(-600, -3200, 3200, 3200 + base - 60), { wash: '#6E7688', fill: '#5B6374', fillOp: 90, bleed: .1, tex: .5, border: .2, ink: null });
+    if (base - 60 > top) paint(rectPts(V ? V[0] - 60 : -600, top, V ? V[1] - V[0] + 120 : 3200, base - 60 - top), { wash: '#6E7688', fill: '#5B6374', fillOp: 90, bleed: .1, tex: .5, border: .2, ink: null });
     for (let i = 0; i < 9; i++) {   // the billowing underside, lit a little from below
-      const x = -500 + i * 330 + 40 * Math.sin(t * .2 + i), y = base - 40 + 30 * hash(i + 3);
+      const x = -500 + i * 330 + 40 * Math.sin(t * .2 + i), y = base - 40 + 30 * hash(i + 3), rx = 230 + 60 * hash(i), ry = 110 + 30 * hash(i + 1);
+      if (!on(x, y, rx + 20, ry + 20)) continue;
       boilSeed(key + ' belly' + i);
-      paint(ellPts(x, y, 230 + 60 * hash(i), 110 + 30 * hash(i + 1), 22, 10), { wash: mixCol('#7B8396', '#8E95A6', hash(i + 5)), fill: '#5E6678', fillOp: 90, bleed: .2, tex: .5, ink: null });
+      paint(ellPts(x, y, rx, ry, 22, 10), { wash: mixCol('#7B8396', '#8E95A6', hash(i + 5)), fill: '#5E6678', fillOp: 90, bleed: .2, tex: .5, ink: null });
+    }
+    for (let i = 0; i < 9; i++) {   // soft bands of cloud, so the tilt passes through layers
+      const y = base - 160 - i * 230 - 40 * hash(i + 21), x = 400 + 500 * Math.sin(i * 2.1) + 60 * Math.sin(t * .15 + i), rx = 900 + 200 * hash(i + 23), ry = 70 + 40 * hash(i + 25);
+      if (!on(x, y, rx + 30, ry + 30)) continue;
+      boilSeed(key + ' band' + i);
+      paint(ellPts(x, y, rx, ry, 24, 14), { fill: i % 2 ? '#7E879A' : '#535C72', fillOp: 95, bleed: .3, tex: .4, border: .3, ink: null });
     }
     for (let i = 0; i < 7; i++) {   // darker masses inside the deck, for texture during the tilt
       const x = -300 + i * 420 + 60 * hash(i + 11), y = base - 500 - 700 * hash(i + 13);
+      if (!on(x, y, 400, 220)) continue;
       boilSeed(key + ' mass' + i);
       paint(ellPts(x, y, 380, 200, 20, 20), { fill: mixCol('#56607A', '#707A8E', hash(i + 17)), fillOp: 110, bleed: .3, tex: .5, border: .3, ink: null });
     }
@@ -475,7 +495,7 @@
         paint(ellPts(cx + i * 190 - 80 * hash(i), 230 + 70 * Math.sin(i * 1.9), 200 + 50 * hash(i + 2), 105 + 25 * hash(i + 4), 22, 10),
           { wash: mixCol('#9AA0AE', '#7C8597', hash(i + 6)), fill: '#6F788A', fillOp: 80, bleed: .2, tex: .45, ink: null });
       }
-      greyDeck(t, lerp(-260, DECK_BASE, ease(seg(t, T17, T20 + 1))), 'B2');
+      greyDeck(t, lerp(-260, DECK_BASE, ease(seg(t, T17, T20 + 1))), 'B2', [...visX(C, .1, 150), ...visY(C, .1, 260)]);
     });
     inLayer(C, .35, () => {
       boilSeed('B2hill');
@@ -538,158 +558,277 @@
       M.forEach(([x, y, rx, ry], i) => { boilSeed('B2near' + i); paint(ellPts(x + sway * 10, y, rx, ry, 22, 14, i), { wash: tone('#3E4622'), fill: tone('#2A3016'), fillOp: 100, bleed: .12, tex: .8, ink: null }); });
       tufts(-800, 2800, 1075, 40, 23, tone(mixCol(FALL.grassDk, PAL.ink, .3)), t, 0, 46, visX(C, 1.25));
     });
-    if (t > T20 - .2) rain(t, { key: 'B2rain', k: .25 * seg(t, T20 - .2, T21) + .1, n: 160, col: '#AEBACB', seed: 5 });
+    if (t > T20 - .2) rain(t, { key: 'B2rain', k: .45 * seg(t, T20 - .2, T21) + .1, n: 160, col: '#AEBACB', seed: 5 });
   }
 
   // ======================================================================================================
   // B3: the rain, and the run home
   // ======================================================================================================
-  const U3 = 22, CS3 = 18, BS3 = 11, LS3 = 31, G3 = 900, X3 = 760, BX3 = X3 + 175;
-  const CAT3 = [BX3 + 120, G3 + 6];
-  const tSettle3 = AT(21, 2.3), tShake = AT(21, 2.9), tMis = AT(21, 3.6), tSeeCat = AT(21, 4), tApIn = AT(21, 4.4);
-  const tGrab3 = T22, tSwoop = AT(22, 1.45), tScoop = AT(22, 1.85), tLeafUp = AT(22, 1.95), tLeafOn = AT(22, 2.75);
-  const tEars = AT(22, 3), tLove = AT(22, 3.25), tTurnR = AT(22, 4.05), tRun = AT(22, 4.45);
-  const tSee3 = AT(23, 2.3), tDoor = AT(24, 1.15), tBack = AT(24, 1.55), tIn0 = AT(24, 1.9), tIn1 = AT(24, 2.8), tShut0 = AT(24, 3.05), tShut1 = AT(24, 3.6);
-  const RUN = [[tRun - .1, 0], [tRun + .35, 4.2], [T24 - .4, 4.2], [T24, 0]];
-  const runS = t => integ(t, RUN), RUN_END = runS(T24 + 1);
-  const X3r = t => X3 + 4 * U3 * runS(t) + 30 * ease(seg(t, tGrab3, tSwoop)) * (1 - ease(seg(t, tScoop, tTurnR)));
-  const DOOR = [X3 + 4 * U3 * RUN_END + 20, G3 - 30], CS_COT = 21;     // the cottage door (ground at its middle)
-  const RAIN_T = c => mixCol(c, '#5D6680', .42);
-  const wetK = t => ease(seg(t, T21, tSettle3 + 1));
-  const EMO3 = [[0, 'nervous', { lookX: .1, lookY: -1 }], [tSettle3, 'nervous'], [tSeeCat, 'sad', { lookX: .8, lookY: .3 }],
-    [tGrab3, 'determined', { lookX: .8, lookY: .3 }], [tScoop + .1, 'surprised', { lookX: .9, lookY: .1 }], [tLove, 'love', { lookX: .8, lookY: .1 }],
-    [tTurnR, 'determined'], [tSee3, 'hopeful', { lookX: .6, lookY: -.3 }], [tDoor + .1, 'relieved']];
+  const U3 = 22, CS3 = 18, BS3 = 11, LS3 = 34, G3 = 900, X3 = 760, COT = 34;
+  const BX3 = X3 + 212, CAT3 = [BX3 + 175, G3 + 6];             // the basket on the grass, and the cat beyond it
+  const DOORX = 2500, DOORY = G3 - 30, HALT = DOORX - 240;       // the cottage door (ground at its middle); where the run stops
+  const tSettle3 = AT(21, 2.3), tShake = AT(21, 2.9), tMis = AT(21, 3.5), tSeeCat = AT(21, 4), tApIn = AT(21, 4.4);
+  const tGrab3 = T22, tSwoop = AT(22, 1.5), tHop = AT(22, 1.85), tLand = tHop + .3, tLeafUp = tLand - .05, tLeafOn = AT(22, 2.95);
+  const tEars = AT(22, 3.1), tLove = AT(22, 3.35), tTurnR = AT(22, 4.05), tRun = AT(22, 4.45), tSee3 = AT(23, 2.3);
+  const tDoor = AT(24, 1.25), tFace = AT(24, 1.6), tIn0 = AT(24, 2), tIn1 = AT(24, 3.1), tShut0 = AT(24, 3.4), tShut1 = AT(24, 4);   // the door thunks shut on beat 4
+
+  // Clawd's feet: a short step to the basket, a step toward the cat, then the run (a unit-speed profile; the distance is
+  // fitted to the geometry, so the run stops just left of the door)
+  const RUN = [[tRun - .12, 0], [tRun + .4, 1], [T24 - .5, 1], [T24 + .1, 0]];
+  const runS = t => integ(t, RUN), RUN_END = runS(T24 + 1), RUN0 = X3 + 84, STRIDE = (HALT - RUN0) / 12;   // 12 whole strides
+  const stepX = t => X3 + 34 * ease(seg(t, tGrab3 - .15, tGrab3 + .25)) + 50 * ease(seg(t, tSwoop - .15, tSwoop + .25));
+  const runX = t => RUN0 + (HALT - RUN0) * runS(t) / RUN_END;
+  const cx3 = t => t < tRun - .12 ? stepX(t) : runX(t);
+  const wetK = t => ease(seg(t, T21 + .2, tSettle3 + 1.2));      // the colours drain to blue-grey as the rain arrives
+
+  const EMO3 = [[0, 'nervous', { lookX: .1, lookY: -1 }], [tSeeCat, 'sad', { lookX: .8, lookY: .35 }], [tGrab3 + .1, 'determined', { lookX: .85, lookY: .3 }],
+    [tLand + .08, 'surprised', { lookX: .9, lookY: .1 }], [tLove, 'love', { lookX: .8, lookY: .15 }], [tTurnR, 'determined'],
+    [tSee3, 'hopeful', { lookX: .6, lookY: -.3 }], [tDoor + .15, 'relieved']];
+
+  // Clawd: facing us for the rain, the apple and the scoop; in profile for the run; back to us at the door
   function pose3(t) {
-    const cl = emotions(t, EMO3, { take: .7 });
-    const o = { ...cl, hat: 'beanie', boilKey: 'B3clawd' };
-    const w = wetK(t), x = X3r(t);
-    o.col = mixCol(cl.col || PAL.clay, '#7C7F95', .25 * w); o.dk = mixCol(cl.dk || PAL.clayDk, '#4E5570', .25 * w); o.lt = mixCol(cl.lt || '#F5B394', '#A9ADBF', .3 * w); o.tint = null;
-    let basketHand = null, u = U3;
+    const cl = emotions(t, EMO3, { take: .7 }), w = wetK(t), lit = .3 * ease(seg(t, tDoor, tDoor + .6));
+    const base = tintCols(cl), o = { ...cl, hat: 'beanie', boilKey: 'B3clawd', tint: null };
+    const wc = (c, tc, k) => mixCol(mixCol(c, tc, k * w), '#FFC48A', lit);   // soaked, then warmed by the door light
+    o.col = wc(base.col, '#7C7F95', .25); o.dk = wc(base.dk, '#4E5570', .25); o.lt = wc(base.lt, '#A9ADBF', .3);
+    const x = cx3(t), spd = (cx3(t + .03) - cx3(t - .03)) / .06, mv = clamp(spd / 400), ph = (x - X3) / STRIDE;
+    let hand = 'R', u = U3, y = G3, xx = x;
     if (t < tTurnR) {
       o.view = 'front';
-      let aR = lerp(cl.aR ?? .2, .9, 1 - ease(seg(t, tApIn - .3, tApIn + .1)));   // still holding the perfect apple up
-      aR = lerp(aR, .25, ease(seg(t, tApIn + .1, tGrab3)));
-      aR = lerp(aR, .6, ease(seg(t, tGrab3, tGrab3 + .3)));
-      aR = lerp(aR, -.55, ease(seg(t, tGrab3 + .3, tSwoop)));   // the swoop down…
-      aR = lerp(aR, .55, backOut(seg(t, tSwoop, tScoop + .15)));   // …and up with the cat in it
+      let aR = .5 + .05 * Math.sin(t * 2.2);                                          // the perfect apple, in the raised hand
+      aR = lerp(aR, .8, ease(seg(t, tApIn - .28, tApIn - .08)));                       // wind-up
+      aR = lerp(aR, .1, easeOut(seg(t, tApIn - .08, tApIn + .1)));                     // and toss it into the basket
+      aR = lerp(aR, -1.05, ease(seg(t, tGrab3 - .15, tGrab3 + .2)));                   // reach down to the basket's rim
+      aR = lerp(aR, -.55, ease(seg(t, tGrab3 + .25, tSwoop)));                         // lift it a little
+      aR = lerp(aR, -.78, ease(seg(t, tSwoop, tSwoop + .25)));                         // tip it toward the cat
+      aR = lerp(aR, .22, backOut(seg(t, tLand, tLand + .55)));                         // and up, with the cat in it
       o.aR = aR;
-      if (t > tGrab3) basketHand = 'R';
-    } else if (t < T24 + .05) {                                   // the run
-      const ph = runS(t) * 1.0 + .1, mv = clamp((runS(t + .03) - runS(t - .03)) / .06 / 4.2);
+      o.rot = (o.rot || 0) + .1 * Math.sin(Math.PI * seg(t, tSwoop - .1, tLand + .4));  // leans toward the cat
+      o.walk = ease(seg(t, tGrab3 - .15, tGrab3 + .25)) + ease(seg(t, tSwoop - .15, tSwoop + .25));   // one leg cycle per step
+    } else if (t < tFace) {
       Object.assign(o, turn(t, tTurnR, tTurnR + .16, 0, .25));
-      if (t > tTurnR + .16) o.view = 'side';
-      o.walk = ph; o.dy = -.5 * mv * Math.abs(Math.cos(ph * TAU)) + (cl.dy || 0) * .3; o.rot = -.1 * mv + (cl.rot || 0) * .3;
-      o.sq = (cl.sq || 0) * .4 + .15 * Math.sin(Math.PI * seg(t, tRun - .35, tRun + .05)) + .12 * spring(t, T24, 6, 14);
-      o.smear = .25 * mv; o.smearDir = 1;
-      o.aL = .72 + .06 * Math.sin(ph * TAU); basketHand = 'L';
-    } else {                                                      // at the door: turn away and go in
-      Object.assign(o, turn(t, tBack, tBack + .2, .25, .5));
+      hand = o.view === 'front' || o.view === 'q' ? 'R' : 'L';
+      o.walk = o.view === 'front' || o.view === 'q' ? null : (x - RUN0) / STRIDE + .25; o.dy = -.5 * mv * Math.abs(Math.cos(ph * TAU)) + (cl.dy || 0) * .3; o.rot = .1 * mv + (cl.rot || 0) * .3;
+      o.sq = (cl.sq || 0) * .4 + .15 * Math.sin(Math.PI * seg(t, tRun - .35, tRun + .05)) + .12 * spring(t, T24 + .05, 6, 14);
+      o.smear = Math.max(o.smear || 0, .25 * mv); o.smearDir = 1;
+      o.aL = .72 + .06 * Math.sin(ph * TAU); hand = o.view === 'side' ? 'L' : hand;
+      if (o.view === 'front' || o.view === 'q') o.aR = .22;
+    } else {                                                                           // at the door: turn away and go in
+      Object.assign(o, turn(t, tFace, tFace + .26, .25, .5)); hand = 'L';
       const k = ease(seg(t, tIn0, tIn1));
-      u = lerp(U3, 15, k);
-      o.walk = t > tIn0 && t < tIn1 ? seg(t, tIn0, tIn1) * 2.5 : null;
-      if (o.view === 'side') { o.aL = .72; basketHand = 'L'; } else basketHand = null;
+      u = lerp(U3, 11, k); y = lerp(G3, DOORY - 8, k); xx = lerp(HALT, DOORX - 30, k);
+      o.walk = t > tIn0 && t < tIn1 + .1 ? seg(t, tIn0, tIn1) * 3.2 : null; o.aL = .72;
+      o.dy = t > tIn0 && t < tIn1 ? -.25 * Math.abs(Math.sin(seg(t, tIn0, tIn1) * Math.PI * 3.2)) : 0;
+      o.sq = (cl.sq || 0) * .4 + .12 * spring(t, T24 + .05, 6, 14);
     }
-    const y = t > tIn0 ? lerp(G3, DOOR[1] - 4, ease(seg(t, tIn0, tIn1))) : G3;
-    const xx = t > tIn0 ? lerp(DOOR[0] - 40, DOOR[0], ease(seg(t, tIn0, tIn1))) : x;
-    return { x: xx, y, u, o, basketHand };
+    return { x: xx, y, u, o, hand, mv, ph };
   }
-  // where the basket is: on the ground, hanging from the right hand (front view), or held out front by the rim (side view)
+
+  // where the basket sits when Clawd holds it by the rim: its left corner at the hand, the basket beyond it
+  const holdAt = (P, view, hand) => {
+    const [hx, hy] = armPt(P.x, P.y, P.u, { ...P.o, view }, hand), k = P.u / U3;
+    return { x: hx + (4.4 * BS3 - 6) * k, y: hy + (4.2 * BS3 + 4) * k, hx, hy, k };
+  };
   function basket3(t, P) {
-    if (!P.basketHand) {
-      if (t < tGrab3) return { x: BX3, y: G3 + 2, rot: 0 };
-      return null;   // carried in, out of sight behind Clawd
+    if (t < tGrab3 - .1) return { x: BX3, y: G3 + 2, k: 1, rot: 0, held: false };
+    let h = holdAt(P, P.o.view, P.hand);
+    if (t > tTurnR && t < tTurnR + .36) {                           // the basket passes from the right hand to the near hand
+      const m = ease(seg(t, tTurnR + .06, tTurnR + .3)), a = holdAt(P, 'q', 'R'), b = holdAt(P, 'side', 'L');
+      h = { x: lerp(a.x, b.x, m), y: lerp(a.y, b.y, m), hx: lerp(a.hx, b.hx, m), hy: lerp(a.hy, b.hy, m), k: 1 };
     }
-    const [hx, hy] = armPt(P.x, P.y, P.u, P.o, P.basketHand);
-    if (P.basketHand === 'R') return { x: hx, y: hy + 9.6 * BS3, rot: .06 * Math.sin(t * 3), hx, hy, hang: true };
-    return { x: hx + 4.4 * BS3 - 6, y: hy + 4.2 * BS3 + 4, rot: 0, hx, hy };
+    const lift = ease(seg(t, tGrab3 - .05, tGrab3 + .25));
+    let rot = .04 * Math.sin(t * 2.1) * lift + .1 * spring(t, tLand, 6, 15);                 // the cat's weight lands, then settles
+    rot += P.mv * (.17 + .06 * Math.sin(P.ph * TAU)) - .3 * spring(t, T24 - .05, 5, 14);      // trails on the run, swings on at the stop
+    return { x: lerp(BX3, h.x, lift), y: lerp(G3 + 2, h.y, lift), k: h.k, hx: h.hx, hy: h.hy, rot: rot * lift, held: true };
   }
-  function cat3(t, B) {
-    const w = clamp(seg(t, T21, tShake) * 1.2);
-    if (t < tScoop) {   // on the grass, soaked and miserable
-      const shake = t > tShake && t < tShake + .5 ? Math.sin((t - tShake) * 55) * .12 * (1 - seg(t, tShake, tShake + .5)) : 0;
-      const pop = seg(t, tScoop - .12, tScoop);
-      return { x: CAT3[0], y: CAT3[1], o: { pose: 'sit', wet: w, ears: -1, eyes: t > tMis ? 'half' : 'open', look: t > tMis ? [-.8, .2] : [.2, -1], pupil: .4, rot: shake, tail: .2 * Math.sin(t * 2),
-        sy: 1 - .15 * pop, boilKey: 'B3cat' } };
+
+  // the cat: soaked on the grass, shakes, watches the basket come down, hops in, rides home
+  function cat3(t, B, P) {
+    const wet = lerp(.3, 1, ease(seg(t, T21, tShake))), base = { wet, boilKey: 'B3cat', pupil: .4 };
+    if (t < tHop) {
+      const sh = t > tShake && t < tShake + .5 ? Math.sin((t - tShake) * 60) * .13 * (1 - seg(t, tShake, tShake + .5)) : 0, cr = ease(seg(t, tHop - .18, tHop));
+      let look = [.1, -1], eyes = 'open';
+      if (t > tMis) { look = [-.8, .25]; eyes = 'half'; }
+      if (t > tSwoop - .1) { look = [-.9, -.05]; eyes = 'open'; }                          // watches the basket come down
+      const blink = 1 - Math.sin(Math.PI * seg(t, AT(21, 3.1), AT(21, 3.4))) * .95;
+      return { x: CAT3[0], y: CAT3[1], mode: 'ground', o: { ...base, pose: 'sit', ears: -1, eyes, look, rot: sh, blink, tail: .2 * Math.sin(t * 2),
+        sy: 1 - .17 * cr - (t > tShake && t < tShake + .5 ? .05 : 0), sx: 1 + .12 * cr } };
     }
-    if (!B) return null;
-    const k = seg(t, tScoop, tScoop + .3), inY = B.y - .35 * BS3, p = arcPt(CAT3, [B.x + 4, inY], 50, ease(k));
-    const up = seg(t, tEars, tEars + .5);
-    return { x: k < 1 ? p[0] : B.x + 4, y: k < 1 ? p[1] : inY, inBasket: true, o: { pose: 'loaf', wet: 1, ears: lerp(-1, .7, up), eyes: t < tEars ? 'wide' : t < AT(22, 3.4) ? 'open' : 'half',
-      look: t < tEars ? [-.3, .2] : [lerp(0, -.8, seg(t, AT(22, 3.3), AT(22, 3.6))), lerp(-1, .1, seg(t, AT(22, 3.3), AT(22, 3.6)))], pupil: .6, noShadow: true, boilKey: 'B3cat',
-      blink: 1 - Math.sin(Math.PI * seg(t, AT(22, 3.7), AT(22, 4.1))) * .95 } };
+    const inP = [B.x, B.y - 12 * B.k];
+    if (t < tLand) {                                                                    // the hop: a side view, facing the basket
+      const k = seg(t, tHop, tLand), p = arcPt(CAT3, inP, 62, ease(k));
+      return { x: p[0], y: p[1], mode: 'fly', o: { ...base, pose: 'pounce', flip: true, rot: lerp(.2, -.3, k), ears: -.4, eyes: 'wide', noShadow: true } };
+    }
+    const land = spring(t, tLand, 8, 20) * .9, up = ease(seg(t, tEars, tEars + .5)), run = P.mv;
+    let look = [-.8, .1], eyes = t < tEars - .05 ? 'wide' : 'open';
+    if (t > tLeafUp && t < tEars + .1) look = [-.1, -1];                                  // eyes up at the leaf coming down
+    if (t > tEars + .2) look = [lerp(-.5, -.85, seg(t, tEars + .2, tLove)), .1];          // then at Clawd
+    if (t > tTurnR) { look = [.95, -.15]; eyes = 'open'; }                                // the cat rides facing the wind
+    let pupil = .55, ears = lerp(-1, .65, up), blink = 1 - Math.sin(Math.PI * seg(t, AT(22, 3.7), AT(22, 4.05))) * .95;
+    if (t > tDoor - .3) { look = [.9, -.35]; eyes = 'wide'; pupil = .95; ears = .9; }       // the door light
+    if (t > tFace + .1) { look = [0, .15]; eyes = 'open'; pupil = .6; ears = .65; blink = 1 - Math.sin(Math.PI * seg(t, AT(24, 2.55), AT(24, 3.05))) * .95; }   // a last look back
+    return { x: inP[0], y: inP[1], mode: 'in', o: { ...base, pose: 'sit', ears, eyes, look, pupil, blink, noShadow: true, sy: 1 - .12 * land, sx: 1 + .08 * land, tail: .1 } };
   }
-  function cam3(t) {
-    const tilt = -1750 * Math.pow(1 - ease(seg(t, T21, tSettle3)), 1.6);
-    const run = X3r(t) - X3, lead = 260 * ease(seg(t, tRun, tRun + .8));
-    return { x: 900 + run * .92 + lead * (1 - ease(seg(t, T24 - .6, T24 + .6))) + 8 * Math.sin(t * .3), y: 540, ty: tilt, z: 1.08 - .04 * ease(seg(t, tRun, T24)), rx: 960, ry: 540 };
+
+  // the soaked cat's spiky fur: tufts along the head and shoulders, drawn under the cat so its outline covers their roots
+  function wetFur(x, y, s, o, key) {
+    const wet = o.wet || 0; if (wet < .4) return;
+    const A = [[-1.9, -5.3, -1, 0], [-1.75, -4.5, -1, .55], [-1.3, -6.4, -.85, -.6], [1.9, -5.3, 1, 0], [1.75, -4.5, 1, .55], [1.3, -6.4, .85, -.6], [0, -6.85, .1, -1],
+      [-2.05, -3.4, -1, .35], [2.05, -3.4, 1, .35], [-2.35, -2.1, -1, .55], [2.35, -2.1, 1, .55]];
+    const col = mixCol(FALL.cat, '#4E5670', .3 * wet), sw = clamp(s / 22, .35, 1.4) * .8, kk = clamp((wet - .4) / .4);
+    push(); translate(x, y + (o.dy || 0) * s); if (o.rot) rotate(o.rot); scale(o.sx ?? 1, o.sy ?? 1);
+    boilSeed(key);
+    A.forEach(([ax, ay, dx, dy], i) => {
+      const L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, len = (.45 + .35 * hash(i * 3 + 1)) * kk, hw = .2, bx = ax - ux * .15, by = ay - uy * .15;
+      paint([[(bx - uy * hw) * s, (by + ux * hw) * s], [(ax + ux * len) * s, (ay + uy * len + .2 * len) * s], [(bx + uy * hw) * s, (by - ux * hw) * s]], { wash: col, ink: PAL.ink, sw });
+    });
+    pop();
   }
-  function puddles(t, x0, x1, key) {
-    for (let i = 0; i < 14; i++) {
-      const x = x0 + (x1 - x0) * (i + .5 * hash(i * 3)) / 14, y = G3 + 10 + 50 * hash(i * 7), w = 60 + 70 * hash(i * 5);
+  // water flung off by the shake
+  function shakeDrops(t, x, y, key) {
+    const a = t - tShake; if (a < 0 || a > .7) return;
+    boilSeed(key);
+    for (let i = 0; i < 10; i++) {
+      const side = i % 2 ? 1 : -1, vx = side * (110 + 130 * hash(i + 2)), vy = -(140 + 160 * hash(i + 5)), r = 3.6 * (1 - a / .7) * (.7 + .6 * hash(i + 9));
+      paint(ellPts(x + vx * a, y + vy * a + 560 * a * a, r, r * 1.25, 8), { wash: '#C9D6E6', washOp: 230, ink: null });
+    }
+  }
+  // spray from the feet on the run
+  function footSplash(t, P) {
+    if (P.mv < .3) return;
+    const spd = P.mv * 400, f = frac(P.ph * 2), hs = STRIDE / (2 * Math.max(spd, 60));
+    boilSeed('B3foot');
+    for (let i = 0; i < 2; i++) {
+      const age = (f + i) * hs; if (age > .3) continue;
+      const fx = P.x - spd * age + ((Math.floor(P.ph * 2) - i) & 1 ? 1.5 : -1.7) * U3;
+      for (let j = 0; j < 3; j++) {
+        const px = fx - (40 + 90 * hash(j + 3)) * age, py = G3 + 6 - (150 + 120 * hash(j + 7)) * age + 700 * age * age, r = 3.4 - age * 7;
+        if (r > .5) paint(ellPts(px, py, r, r * 1.2, 8), { wash: '#C9D6E6', washOp: 230, ink: null });
+      }
+    }
+  }
+  function puddles(t, x0, x1, vis, key) {
+    for (let i = 0; i < 18; i++) {
+      const d = hash(i * 9 + 1) * 1.3, g = ease(seg(t, T21 + .5 + d, T21 + 2.3 + d)); if (g <= .02) continue;
+      const x = x0 + (x1 - x0) * (i + .5 * hash(i * 3)) / 18, y = G3 + 10 + 50 * hash(i * 7), w = (60 + 70 * hash(i * 5)) * g;
+      if (x + w < vis[0] || x - w > vis[1]) continue;
       boilSeed(key + i);
       paint(ellPts(x, y, w, w * .2, 20, 2), { wash: '#8A93A6', fill: '#6F7890', fillOp: 70, bleed: .05, tex: .3, ink: mixCol(PAL.ink, '#6F7890', .5), sw: .5 });
       const a = frac(t * 1.3 + hash(i)), r = 8 + (w * .7) * a;
       inkLine([[x - r, y], [x, y - r * .18], [x + r, y], [x, y + r * .18], [x - r, y]], .6 * (1 - a), '#C3CFDC', 'inkfine', .8);
     }
   }
+  // leaves stuck flat to the wet lane
+  function litter(vis, tone) {
+    const cols = [FALL.amber, FALL.rust, FALL.gold, FALL.maple, FALL.olive];
+    for (let i = 0; i < 16; i++) {
+      const x = X3 - 500 + (DOORX + 900 - X3) * (i + hash(i * 4.1)) / 16, y = G3 + 22 + 60 * hash(i * 6.3);
+      if (x < vis[0] || x > vis[1]) continue;
+      boilSeed('B3lit' + i);
+      leaf(x, y, 8 + 5 * hash(i + 2), hash(i * 3) * TAU, tone(cols[i % 5]), { spin: .3 + .2 * hash(i), ink: tone(FALL.barkDk) });
+    }
+  }
+  // The door leaf again, to be painted OVER Clawd as it swings shut (cottage() paints its own under him). Same polygon, seed
+  // and tone as lib's, so the two match to the stroke.
+  function doorLeaf(x, y, s, d, tone) {
+    if (d >= 1) return;
+    const sw = clamp(s / 12, .6, 2), dw = 3.6 * s, dTop = y - 11 * s, arch = [];
+    for (let i = 0; i <= 10; i++) { const a = Math.PI * i / 10; arch.push([x - Math.cos(a) * dw, dTop - Math.sin(a) * 2.6 * s]); }
+    const hinge = x - dw, wdt = 2 * dw * (1 - ease(d) * .82);
+    boilSeed('B3cot door');
+    paint([[hinge, y], ...arch.map(([a, b]) => [hinge + (a - hinge) * wdt / (2 * dw), b]), [hinge + wdt, y]], { wash: tone(FALL.wood), fill: tone(FALL.woodDk), fillOp: 90, tex: .7, bleed: .05, ink: PAL.ink, sw });
+    for (let i = 1; i < 4; i++) inkLine([[hinge + wdt * i / 4, y - .3 * s], [hinge + wdt * i / 4, dTop - 1.8 * s]], sw * .7, tone(FALL.woodDk), 'dry', 0);
+    paint(ellPts(hinge + wdt * .85, y - 5.5 * s, .4 * s, .4 * s, 10), { wash: '#C9A45A', ink: PAL.ink, sw: sw * .7 });
+  }
+
+  // the basket with the cat in it: back of the basket, the cat, the front of the basket, then the leaf on its head
+  function carried(t, B, c, P) {
+    const k = B.k, bo = { key: 'B3basket', apples: 6, leaf: t < tLeafUp }, hasCat = c && c.mode !== 'ground';
+    push(); translate(B.hx, B.hy); rotate(B.rot); translate(-B.hx, -B.hy);
+    basket(B.x, B.y, BS3 * k, { ...bo, part: 'back' });
+    if (hasCat) { wetFur(c.x, c.y, CS3 * k, c.o, 'B3furC'); cat(c.x, c.y, CS3 * k, c.o); }
+    basket(B.x, B.y, BS3 * k, { ...bo, part: 'front' });
+    if (hasCat && t >= tLeafUp) {                                   // the leaf pops out of the basket and settles on the cat's head
+      const [hx, hy] = catHead(c.x, c.y, CS3 * k, c.o), kk = seg(t, tLeafUp, tLeafOn), q = ease(kk), s = LS3 * k;
+      const from = [B.x + 2.2 * BS3 * k, B.y - 5.5 * BS3 * k], to = [hx + 3 * k, hy - 1.5 * CS3 * k - .62 * s];
+      const [x, y] = kk < 1 ? arcPt(from, to, 120 * k, q) : to;
+      const flutter = .12 * P.mv * Math.sin(P.ph * TAU * 2) + .05 * Math.sin(t * 3);
+      boilSeed('B3red');
+      redLeaf(x + 14 * Math.sin(kk * 8) * (1 - kk), y, lerp(1.6 * BS3 * k, s, q), lerp(.5, .3, q) + .5 * Math.sin(kk * 9) * (1 - kk) + flutter,
+        { spin: kk < 1 ? lerp(Math.cos(kk * 12), 1, q * q) : 1 });
+      if (kk >= 1) splashes(t, { key: 'B3leafspl', x0: to[0] - 18 * k, x1: to[0] + 18 * k, y: to[1] + 2 * k, depth: 6, n: 3 });
+    }
+    pop();
+  }
+
+  const CAM2 = [960 + 10 * Math.sin(T21 * .31), 540, 1.06];       // where B2's camera ended: the tilt starts from here
+  function cam3(t) {
+    const tilt = -1750 * Math.pow(1 - ease(seg(t, T21, tSettle3)), 1.6);
+    const yz = kf(t, [[T21, [CAM2[1], CAM2[2]]], [tSettle3, [650, 1.12]], [tSeeCat - .3, [668, 1.15]], [tSwoop - .15, [738, 1.5]], [tLeafOn + .3, [742, 1.58]],
+      [tTurnR + .25, [740, 1.52]], [tRun + 1.1, [695, 1.13]], [T24 - .7, [680, 1.17]], [T24 + .5, [650, 1.3]], [tShut1, [645, 1.36]], [T25, [640, 1.42]]], ease);
+    let x = kf(t, [[T21, CAM2[0]], [tSettle3, 900], [tSeeCat - .3, 930], [tSwoop - .15, 985], [tLeafOn + .3, 1000], [tTurnR, 1000]], ease);
+    if (t > tTurnR) x = lerp(1000, runX(t) + 330, ease(seg(t, tTurnR, tRun + 1.1)));       // pulls back and leads the run
+    if (t > T24 - 1.3) x = lerp(x, DOORX - 90, ease(seg(t, T24 - 1.3, T24 + .35)));          // settles on the door
+    return { x: x + 6 * Math.sin(t * .3), y: yz[0] + 3 * Math.sin(t * .4), ty: tilt, z: yz[1], rx: 960, ry: 540 };
+  }
+
   function shotB3(t, lt, dur) {
     const C = cam3(t), w = wetK(t), sway = .5 * Math.sin(t * 1.4);
-    const tone = c => mixCol(c, '#5D6680', .42 * w);
+    const tone = c => mixCol(c, mixCol('#6F7A8E', '#596682', w), lerp(.38, .56, w));
     inLayer(C, .1, () => {
       skyCheap('storm', 'rain', w, visX(C, .1, 0), -300, 1000, 'B3sky');
-      greyDeck(t, DECK_BASE, 'B2');
+      greyDeck(t, DECK_BASE, 'B2', [...visX(C, .1, 150), ...visY(C, .1, 260)]);
     });
-    inLayer(C, .3, () => orchardSlope(t, c => mixCol(mixCol(c, '#7A8296', .55), '#5D6680', .3 * w), 'B3far', -800, 3400, visX(C, .3, 60)));
+    inLayer(C, .3, () => orchardSlope(t, c => mixCol(mixCol(c, '#7A8296', .55), '#5D6680', .3 * w), 'B3far', -800, 3800, visX(C, .3, 60)));
     inLayer(C, .6, () => {
       boilSeed('B3meadow');
-      paint(rectPts(-900, 760, 5000, 1000), { wash: tone(mixCol(FALL.grass, '#8C93A4', .3)), fill: tone(FALL.grassDk), fillOp: 55, bleed: .02, tex: .5, border: .15, ink: null });
-      appleTree(120, 800, 13, { key: 'B3m1', seed: 5, lite: true, tone: c => tone(mixCol(c, '#8C93A4', .3)), sway: sway * .5, apples: 9 });
-      appleTree(1500, 790, 11, { key: 'B3m2', seed: 6, lite: true, tone: c => tone(mixCol(c, '#8C93A4', .3)), sway: sway * .5, apples: 7 });
+      const mv = visX(C, .6, 60);
+      paint(rectPts(mv[0], 760, mv[1] - mv[0], 320), { wash: tone(mixCol(FALL.grass, '#8C93A4', .3)), fill: tone(FALL.grassDk), fillOp: 55, bleed: .02, tex: .5, border: .15, ink: null });
+      const v = visX(C, .6, 200), tt = c => tone(mixCol(c, '#8C93A4', .3));
+      [[120, 800, 13, 5, 9], [880, 786, 10, 7, 6], [1500, 790, 11, 6, 7], [2150, 782, 12, 8, 8], [2800, 792, 11, 9, 7]].forEach(([x, y, s, seed, n]) => {
+        if (x > v[0] - 300 && x < v[1] + 300) appleTree(x, y, s, { key: 'B3m' + seed, seed, lite: true, tone: tt, sway: sway * .5, apples: n });
+      });
     });
-    rain(t, { key: 'B3rainB', k: .4 + .6 * w, n: 130, col: '#A9B5C6', len: 40, seed: 12, wind: .22 });
-    const P = pose3(t), B = basket3(t, P), c = cat3(t, B);
+    rain(t, { key: 'B2rain', k: lerp(.55, 1, ease(seg(t, T21, T21 + 1.8))), n: 160, col: '#AEBACB', seed: 5 });
+    const P = pose3(t), B = basket3(t, P), c = cat3(t, B, P);
     inLayer(C, 1, () => {
-      boilSeed('B3ground');
-      paint(rectPts(-800, 820, 5200, 900), { wash: tone(FALL.grass), fill: tone(FALL.grassDk), fillOp: 70, bleed: .02, tex: .6, border: .15, ink: null });
-      boilSeed('B3lane');
-      paint(rectPts(-800, 872, 5200, 100, 4), { wash: tone(FALL.path), fill: tone(mixCol(FALL.path, FALL.grassDk, .3)), fillOp: 80, bleed: .05, tex: .6, ink: null });
-      appleTree(360, 850, 22, { key: 'B3tree', seed: 3, tone, sway, apples: 10 });
       const vis = visX(C, 1, 400);
-      if (DOOR[0] + 26 * CS_COT > vis[0] && DOOR[0] - 26 * CS_COT < vis[1]) {
-        const door = t < tDoor ? 0 : t < tShut0 ? backOut(seg(t, tDoor, tDoor + .45)) : 1 - ease(seg(t, tShut0, tShut1)) + .06 * spring(t, tShut1, 7, 18);
-        cottage(DOOR[0], DOOR[1], CS_COT, { door: clamp(door), lit: 1, wet: 1, dusk: .25, key: 'B3cot' });
+      boilSeed('B3ground');
+      paint(rectPts(vis[0] - 300, 820, vis[1] - vis[0] + 600, Math.max(200, visY(C, 1, 80)[1] - 820)), { wash: tone(FALL.grass), fill: tone(FALL.grassDk), fillOp: 70, bleed: .02, tex: .6, border: .15, ink: null });
+      boilSeed('B3lane');
+      paint(rectPts(vis[0] - 300, 872, vis[1] - vis[0] + 600, 100, 4), { wash: tone(FALL.path), fill: tone(mixCol(FALL.path, FALL.grassDk, .3)), fillOp: 80, bleed: .05, tex: .6, ink: null });
+      litter(vis, tone);
+      if (vis[0] < 360 + 330) appleTree(360, 850, 22, { key: 'B3tree', seed: 3, tone, sway, apples: 10 });
+      // the cottage, with its door: it swings open on bar 24 and shuts behind them
+      const door = t < tDoor ? 0 : t < tShut0 ? backOut(seg(t, tDoor, tDoor + .5)) : 1 - ease(seg(t, tShut0, tShut1)) + .06 * spring(t, tShut1, 7, 18);
+      const dk = clamp(door), doorOpen = Math.min(dk, .999);
+      if (DOORX + 20 * COT > vis[0] && DOORX - 20 * COT < vis[1]) {
+        cottage(DOORX, DOORY, COT, { door: doorOpen, lit: 1, wet: 1, dusk: .8, key: 'B3cot' });
+        steam(t, DOORX + 11 * COT, DOORY - 31 * COT, 14, { key: 'B3smoke' });
+        glow(DOORX, G3 + 50, 300, FALL.lamp, .55 * dk);              // the warm light spills onto the wet lane
       }
-      puddles(t, X3 - 500, DOOR[0] + 200, 'B3pud');
+      puddles(t, X3 - 500, DOORX + 300, vis, 'B3pud');
       splashes(t, { key: 'B3spl', x0: vis[0], x1: vis[1], y: G3 + 30, depth: 60, n: 18, k: w });
-      if (B && !B.hang && B.hx === undefined) basket(B.x, B.y, BS3, { key: 'B3basket', apples: t < tApIn + .35 ? 5 : 6, leaf: t < tLeafUp });
-      if (c && !c.inBasket) cat(c.x, c.y, CS3, c.o);
-      const drawCarried = () => {
-        if (!B || B.hx === undefined) return;
-        const o = { key: 'B3basket', apples: 6, leaf: false };
-        basket(B.x, B.y, BS3, { ...o, part: 'back' });
-        if (c && c.inBasket) cat(c.x, c.y, CS3, c.o);
-        basket(B.x, B.y, BS3, { ...o, part: 'front' });
-        if (c && c.inBasket && t > tLeafUp) {   // the leaf pops up out of the basket and settles on the cat's head: an umbrella
-          const [hx, hy] = catHead(c.x, c.y, CS3, c.o), k = seg(t, tLeafUp, tLeafOn), q = ease(k);
-          const from = [B.x + 2.2 * BS3, B.y - 5.5 * BS3], to = [hx + 2, hy - 1.25 * CS3 - LS3 * .35];
-          const [x, y] = k < 1 ? arcPt(from, to, 110, q) : to;
-          boilSeed('B3red');
-          redLeaf(x + 12 * Math.sin(k * 8) * (1 - k), y, lerp(1.6 * BS3, LS3, q), lerp(.5, -.12, q) + .5 * Math.sin(k * 9) * (1 - k) + .05 * Math.sin(t * 3), { spin: k < 1 ? lerp(Math.cos(k * 12), 1, q * q) : 1 });
-          if (k >= 1) splashes(t, { key: 'B3leafspl', x0: to[0] - 25, x1: to[0] + 25, y: to[1] - 8, depth: 4, n: 3 });
-        }
-      };
-      if (!(t > T24 + .05 && P.o.view !== 'side')) drawCarried();
-      if (P.basketHand === 'R' && t < tApIn) {   // the perfect apple, still held up
-        const [hx, hy] = armPt(P.x, P.y, P.u, P.o, 'R');
-        apple(hx, hy - 6, 13, { key: 'B3perfect' });
-      } else if (t >= tApIn - .01 && t < tApIn + .35) {
-        const k = seg(t, tApIn, tApIn + .35), [x, y] = arcPt([X3 + 150, G3 - 160], [BX3 + 10, G3 - 60], 40, k);
-        apple(x, y, 13, { key: 'B3perfect', rot: 4 * k });
+      // the soaked cat on the grass, the basket on the grass
+      if (!B.held) basket(B.x, B.y, BS3, { key: 'B3basket', apples: t < tApIn + .35 ? 5 : 6, leaf: true });
+      if (c.mode === 'ground') {
+        wetFur(c.x, c.y, CS3, c.o, 'B3furG'); cat(c.x, c.y, CS3, c.o);
+        shakeDrops(t, c.x, c.y - 5 * CS3, 'B3drops');
       }
-      if (t < T24 + .05 || t < tShut0) clawd(P.x, P.y, P.u, P.o);
-      if (t > T24 + .05 && P.o.view === 'side') drawCarried();
+      if (B.held && t < tShut1 + .05) carried(t, B, c, P);
+      // the perfect apple: in the raised hand, then tossed into the basket
+      if (t < tApIn + .35) {
+        if (t < tApIn) { const [hx, hy] = armPt(P.x, P.y, P.u, P.o, 'R'); apple(hx, hy - 8, 13, { key: 'B3perfect' }); }
+        else {
+          const Pa = pose3(tApIn), [hx, hy] = armPt(Pa.x, Pa.y, Pa.u, Pa.o, 'R'), k = seg(t, tApIn, tApIn + .35), [x, y] = arcPt([hx, hy - 8], [BX3 + 8, G3 - 40], 55, k);
+          apple(x, y, 13, { key: 'B3perfect', rot: 4 * k });
+        }
+      }
+      if (t < tShut1 + .05) clawd(P.x, P.y, P.u, P.o);
+      if (t >= tShut0 - .02 && t < tShut1 + .12) doorLeaf(DOORX, DOORY, COT, doorOpen, c2 => mixCol(mixCol(c2, '#5D6680', .35), '#3A3F66', .32));   // the door closes over them
+      footSplash(t, P);
     });
-    rain(t, { key: 'B3rainF', k: w, n: 70, col: '#C3CFDC', len: 60, seed: 19, wind: .22 });
+    rain(t, { key: 'B3rainF', k: w, n: 60, col: '#C3CFDC', len: 60, seed: 19, wind: .22 });
     if (t > T25 - .3) brushWipe(.5 * ease(seg(t, T25 - .3, T25)), [FALL.woodDk, FALL.wood]);
   }
 
