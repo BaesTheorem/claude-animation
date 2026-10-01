@@ -12,7 +12,8 @@
 (() => {
   const THREE = window.THREE, S = window.SCORE;
   const Q = new URLSearchParams(location.search), DBG = k => Q.get(k);   // review switches: nobloom, tm, only
-  const W = 1920, H = 1080, DUR = 259.0;
+  // ?scale=2 renders 3840x2160: every size in pixels (line widths) scales with it, points scale with H.
+  const SCALE = +(DBG('scale') || 1), W = Math.round(1920 * SCALE), H = Math.round(1080 * SCALE), DUR = 259.0;
   window.DUR = DUR;
   const BARS = S.bars;                                    // BARS[k]: start of bar k + 1 in seconds
 
@@ -103,16 +104,43 @@
       uniform sampler2D tDiffuse; uniform float uFade, uSeed; uniform vec2 uRes; varying vec2 vUv;
       float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + uSeed) * 43758.5453); }
       void main(){
-        vec3 c = texture2D(tDiffuse, vUv).rgb;
-        vec2 q = vUv - .5; q.x *= uRes.x / uRes.y;
+        vec2 d = vUv - .5; float r2 = dot(d, d);
+        vec2 off = d * r2 * .018;                             // a lens's colour fringe, only toward the edges
+        vec3 c = vec3(texture2D(tDiffuse, vUv + off).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - off).b);
+        vec2 q = d; q.x *= uRes.x / uRes.y;
         float v = smoothstep(1.05, .25, length(q));          // vignette
-        c *= mix(.55, 1.0, v);
+        c *= mix(.52, 1.0, v);
+        float l = dot(c, vec3(.2126, .7152, .0722));
+        c = mix(c, c * vec3(1.05, 1.0, .94), smoothstep(.25, 1.2, l));   // warm the highlights a touch
+        c += vec3(.002, .003, .008) * (1.0 - smoothstep(0.0, .12, l));   // and keep the blacks blue, never flat
         c += (h(gl_FragCoord.xy) - .5) * .011;               // fine static grain (dither)
         gl_FragColor = vec4(c * uFade, 1.0);
       }`
   });
   composer.addPass(FINISH);
   composer.addPass(new THREE.OutputPass());
+
+  // the sky: soft nebula whose colours follow the harmony (the chord's root and fifth), drifting slowly
+  const NEB = new THREE.Mesh(new THREE.SphereGeometry(180, 48, 24), new THREE.ShaderMaterial({
+    uniforms: { uA: { value: new THREE.Color() }, uB: { value: new THREE.Color() }, uT: { value: 0 }, uK: { value: 0 } },
+    vertexShader: `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform vec3 uA, uB; uniform float uT, uK; varying vec3 vDir;
+      float hh(vec3 p){ p = fract(p * .3183099 + .1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+      float n3(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(mix(hh(i), hh(i + vec3(1,0,0)), f.x), mix(hh(i + vec3(0,1,0)), hh(i + vec3(1,1,0)), f.x), f.y),
+                   mix(mix(hh(i + vec3(0,0,1)), hh(i + vec3(1,0,1)), f.x), mix(hh(i + vec3(0,1,1)), hh(i + vec3(1,1,1)), f.x), f.y), f.z); }
+      float fbm(vec3 p){ float a = .5, s = 0.0; for (int i = 0; i < 5; i++){ s += a * n3(p); p = p * 2.03 + 11.7; a *= .5; } return s; }
+      void main(){
+        vec3 d = normalize(vDir);
+        float f = fbm(d * 2.1 + vec3(0.0, uT * .004, uT * .002));
+        float g = fbm(d * 4.3 + f * 1.6 - vec3(uT * .003, 0.0, 0.0));
+        float neb = smoothstep(.5, 1.05, f * .75 + g * .55);
+        vec3 col = mix(uA, uB, smoothstep(.3, .8, g)) * neb + vec3(.02, .025, .06) * smoothstep(.5, .9, g);
+        gl_FragColor = vec4(col * uK, 1.0);
+      }`,
+    side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false
+  }));
+  NEB.renderOrder = -10; NEB.frustumCulled = false; scene.add(NEB);
 
   // depth: lines fade with scene fog, points with the same near/far (set per frame from the camera distance)
   scene.fog = new THREE.Fog(BG.clone(), 8, 20);
@@ -156,11 +184,24 @@
   }
   const NN = S.notes.length;
   const sparks = pointsLayer(NN + 64), rings = pointsLayer(96, true), orbs = pointsLayer(32), stars = pointsLayer(1400);
+  const dust = pointsLayer(2600), burst = pointsLayer(720);
+  // horizontal lens streaks for the brightest lights (an anamorphic flare), drawn inside a wide square sprite
+  const streaks = (() => {
+    const L = pointsLayer(64);
+    return L;
+  })();
+  {
+    const pts = scene.children[scene.children.length - 1];
+    pts.material.fragmentShader = `varying vec3 vC; void main(){ vec2 q = (gl_PointCoord - .5) * 2.0;
+      float a = exp(-q.y * q.y * 900.0) * exp(-q.x * q.x * 2.2) + .35 * exp(-q.y * q.y * 120.0) * exp(-q.x * q.x * 9.0);
+      gl_FragColor = vec4(vC * a, 1.0); }`;
+    pts.material.needsUpdate = true;
+  }
 
   // ---------------------------------------------------------------- fat lines
   function fatLine(width, opacity = 1) {
     const geom = new THREE.LineGeometry();
-    const mat = new THREE.LineMaterial({ linewidth: width, vertexColors: true, transparent: true, opacity,
+    const mat = new THREE.LineMaterial({ linewidth: width * SCALE, vertexColors: true, transparent: true, opacity,
       blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: true });
     mat.resolution.set(W, H);
     const line = new THREE.Line2(geom, mat); line.frustumCulled = false; scene.add(line);
@@ -171,25 +212,27 @@
         line.visible = true;
         const g = new THREE.LineGeometry(); g.setPositions(pts); g.setColors(cols);
         line.geometry.dispose(); line.geometry = g; line.computeLineDistances();
-        if (width2 !== undefined) mat.linewidth = width2;
+        if (width2 !== undefined) mat.linewidth = width2 * SCALE;
       },
       hide() { line.visible = false; }
     };
   }
-  function thinLines() {
-    const g = new THREE.BufferGeometry();
-    const mat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: true });
-    const ls = new THREE.LineSegments(g, mat); ls.frustumCulled = false; scene.add(ls);
+  // many separate segments (grid, flashes, ring waves) as one antialiased fat-line batch
+  function thinLines(width = 1.1) {
+    const mat = new THREE.LineMaterial({ linewidth: width * SCALE, vertexColors: true, transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: true });
+    mat.resolution.set(W, H);
+    const ls = new THREE.LineSegments2(new THREE.LineSegmentsGeometry(), mat); ls.frustumCulled = false; scene.add(ls);
     return {
       set(P, C) {
-        g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(P), 3));
-        g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(C), 3));
-        ls.visible = P.length > 0;
+        if (!P.length) { ls.visible = false; return; }
+        const g = new THREE.LineSegmentsGeometry(); g.setPositions(P); g.setColors(C);
+        ls.geometry.dispose(); ls.geometry = g; ls.visible = true;
       }
     };
   }
 
-  const guide = fatLine(1.6), grid = thinLines(), chain = fatLine(2.2), flashes = thinLines();
+  const guide = fatLine(1.6), grid = thinLines(1.0), chain = fatLine(2.2), flashes = thinLines(1.6);
   const columns = [0, 1, 2, 3, 4].map(() => fatLine(3.2));
   const poly = fatLine(3.0);
   const polyFill = (() => {
@@ -198,17 +241,20 @@
     const m = new THREE.Mesh(g, mat); m.frustumCulled = false; scene.add(m);
     return { set(P, C) { g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(P), 3)); g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(C), 3)); m.visible = P.length > 0; } };
   })();
-  const trails = [0, 1, 2, 3].map(() => fatLine(3.4));
+  const trailHalos = [0, 1, 2, 3].map(() => fatLine(13)), trails = [0, 1, 2, 3].map(() => fatLine(3.4));
 
   // glass: a faint rim-lit surface that gives the helix its cylinder and the torus its tube
   function glass(col) {
     const mat = new THREE.ShaderMaterial({
-      uniforms: { uCol: { value: col.clone() }, uK: { value: 0 } },
-      vertexShader: `varying vec3 vN, vV; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0);
-        vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
-      fragmentShader: `uniform vec3 uCol; uniform float uK; varying vec3 vN, vV;
-        void main(){ float f = 1.0 - abs(dot(normalize(vN), normalize(vV)));
-          gl_FragColor = vec4(uCol * uK * pow(f, 5.0), 1.0); }`,
+      uniforms: { uCol: { value: col.clone() }, uK: { value: 0 }, uHue: { value: 0 } },
+      vertexShader: `varying vec3 vN, vV, vW; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); vW = position; gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: `uniform vec3 uCol; uniform float uK, uHue; varying vec3 vN, vV, vW;
+        void main(){ float f = clamp(1.0 - abs(dot(normalize(vN), normalize(vV))), 0.0, 1.0);   // pow() of a negative is NaN, and bloom spreads NaN
+          // thin-film colour: the hue turns with the viewing angle and a little along the surface, like a soap film
+          vec3 film = .5 + .5 * cos(6.2831 * (f * 1.1 + uHue + .04 * vW.y + vec3(0.0, .33, .67)));
+          vec3 c = mix(uCol, film, .5);
+          gl_FragColor = vec4(c * uK * pow(f, 4.2), 1.0); }`,
       blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true, side: THREE.DoubleSide
     });
     const m = new THREE.Mesh(new THREE.BufferGeometry(), mat); m.frustumCulled = false; scene.add(m);
@@ -228,6 +274,19 @@
     const u = hash(i * 3.1) * 2 - 1, a = hash(i * 7.7) * TAU, r = 70 + 50 * hash(i * 1.3), s = Math.sqrt(1 - u * u);
     return { v: new THREE.Vector3(r * s * Math.cos(a), r * u * .6, r * s * Math.sin(a)), b: .08 + .22 * Math.pow(hash(i * 9.1), 3), tw: hash(i * 5.3) };
   });
+
+  // dust motes in the air around the geometry: fixed homes, a slow wander, a faint twinkle
+  const DUST = Array.from({ length: 2600 }, (_, i) => {
+    const u = hash(i * 1.7 + 3) * 2 - 1, a = hash(i * 2.9 + 1) * TAU, r = 3 + 26 * Math.cbrt(hash(i * 4.1 + 2)), sq = Math.sqrt(1 - u * u);
+    return { x: -3.7 + r * sq * Math.cos(a), y: r * u * .8, z: r * sq * Math.sin(a), f1: .03 + .05 * hash(i * 5.3), f2: .02 + .04 * hash(i * 6.1),
+      ph: hash(i * 7.9) * TAU, b: .35 + .65 * Math.pow(hash(i * 8.3), 2), sz: .1 + .18 * Math.pow(hash(i * 9.7), 2) };
+  });
+  // the meeting on D-flat: sparks thrown across the torus surface from the point where the voices meet
+  const BURSTS = [
+    { t: 0, b: 10.0, p: 73, n: 480, k: 1.0 },                     // bar 59, the unison (time filled in below)
+    { t: 0, b: 13.0, p: 73, n: 220, k: .6 }                       // bar 62, where they part
+  ];
+  const BSP = Array.from({ length: 480 }, (_, i) => ({ a: hash(i * 13.1) * TAU, s: .35 + .65 * Math.pow(hash(i * 17.3), .7), c: hash(i * 19.7), life: 1.6 + 2.4 * hash(i * 23.9) }));
 
   // ---------------------------------------------------------------- chapters: λ, τ and the voices
   function morph(B) {
@@ -343,7 +402,7 @@
     // glass cylinder around the helix (only while there is height), glass torus once time is a circle
     {
       const hk = M.lam * smooth(seg(t, 2, 14));
-      cylGlass.mat.uniforms.uK.value = .16 * hk;
+      cylGlass.mat.uniforms.uK.value = .13 * hk;
       if (hk > .005) {
         const hgt = 14 * HS * 12 * M.lam / 12 * 6;
         if (!cylGlass.m.userData.h || Math.abs(cylGlass.m.userData.h - hgt) > .01) {
@@ -380,6 +439,55 @@
       stars.add(V, WHITE, s.b * reveal * (.75 + .25 * Math.sin(t * .7 + s.tw * 30)), .45);
     }
     stars.end();
+
+    // music energy: how much piano is sounding right now (drives the dust's shimmer and the sky's breath)
+    let energy = 0;
+    for (let i = 0; i < NN; i++) {
+      const n = NOTES[i]; if (n.on > t) break;
+      const age = t - n.on; if (age < 1.5) energy += (n.v / 127) * Math.exp(-age / .35);
+    }
+    const eK = Math.min(1, energy / 2.2), endK = 1 - smooth(seg(t, DUR - 6, DUR - 1.5));
+
+    // the sky: nebula colours from the chord's root and fifth, crossfading over the first half of each bar
+    {
+      const k = clamp(Math.floor(B), 0, NBAR - 1), kp = Math.max(0, k - 1), g = smooth(clamp((B - k) / .6));
+      const col = (bar, which) => { const c = CH[bar]; const pc = which ? (c.root + 7) % 12 : c.root; return new THREE.Color().setHSL(((pc * 30 + 20) % 360) / 360, .42, .34); };
+      NEB.material.uniforms.uA.value.copy(col(kp, 0)).lerp(col(k, 0), g);
+      NEB.material.uniforms.uB.value.copy(col(kp, 1)).lerp(col(k, 1), g);
+      NEB.material.uniforms.uT.value = t;
+      const chap = B < 24 ? 1 : B < 48 ? .9 : .8, climaxK2 = smooth(seg(B, 57.8, 59.4)) * (1 - smooth(seg(B, 61, 62.8)));
+      NEB.material.uniforms.uK.value = .032 * reveal * chap * (1 + .35 * climaxK2) * (.85 + .3 * eK) * endK;
+      NEB.position.copy(camera.position);
+    }
+
+    // dust motes, drifting; they catch a little more light when the piano is loud
+    dust.begin();
+    {
+      const ck = CH[clamp(Math.floor(B), 0, NBAR - 1)], tint = new THREE.Color().setHSL(((ck.root * 30 + 20) % 360) / 360, .35, .8);
+      const base = new THREE.Color('#cfd8ff').lerp(tint, .3), bk = .26 * reveal * (.75 + .6 * eK) * endK;
+      for (let i = 0; i < DUST.length; i++) {
+        const d = DUST[i];
+        V.set(d.x + .7 * Math.sin(TAU * d.f1 * t + d.ph), d.y + .55 * Math.sin(TAU * d.f2 * t + 1.3 * d.ph), d.z + .7 * Math.cos(TAU * d.f1 * .8 * t + d.ph));
+        dust.add(V, base, bk * d.b * (.7 + .3 * Math.sin(t * (.6 + 9 * d.f1) + d.ph)), d.sz);
+      }
+    }
+    dust.end();
+
+    // the burst where the voices meet (and a smaller one where they part), thrown across the torus surface
+    burst.begin();
+    BURSTS[0].t = BARS[58]; BURSTS[1].t = BARS[61];
+    for (const bb of BURSTS) {
+      const age0 = t - bb.t; if (age0 < 0 || age0 > 4.5 || M.tau < .5) continue;
+      for (let i = 0; i < bb.n; i++) {
+        const sp = BSP[i], age = age0; if (age > sp.life) continue;
+        const u = 1 - Math.exp(-age / .9), db = sp.s * u * Math.cos(sp.a) * 4.2, dp = sp.s * u * Math.sin(sp.a) * 6.5;
+        pos(bb.p + dp, 48 + bb.b + db, V);
+        const col = sp.c < .34 ? GOLD : sp.c < .68 ? CYAN : MERGE;
+        burst.add(V, col, bb.k * 1.3 * Math.exp(-age / (sp.life * .42)) * (.55 + .45 * sp.c), .16 + .14 * sp.s);
+      }
+    }
+    burst.end();
+    torGlass.mat.uniforms.uHue.value = t * .012; cylGlass.mat.uniforms.uHue.value = t * .012 + .3;
 
     // the helix / circle / playhead-slice guide, coloured by pitch class
     {
@@ -494,7 +602,7 @@
     // trails: the walked path of each voice
     TRAILS.forEach(([L, b0, b1, col], i) => {
       const end = Math.min(B, b1);
-      if (end <= b0 + .01) { trails[i].hide(); return; }
+      if (end <= b0 + .01) { trails[i].hide(); trailHalos[i].hide(); return; }
       const current = B < b1 + .02, fade = current ? 1 : .32 + .1 * (i === 0 && B > 48 ? 1 : 0);
       const endFade = 1 - smooth(seg(B, 72.15, 72.7));
       const P = [], C = [], step = 1 / 16;
@@ -505,6 +613,7 @@
         C.push(col.r * b, col.g * b, col.b * b);
       }
       trails[i].set(P, C, current ? 3.6 : 2.2);
+      trailHalos[i].set(P, C.map(x => x * (current ? .16 : .07)), current ? 16 : 10);
     });
 
     // notes: a spark at each performed note, then faint dust where it sounded
@@ -537,8 +646,8 @@
     }
     sparks.end(); rings.end();
 
-    // the voices
-    orbs.begin();
+    // the voices, each with a horizontal lens streak
+    orbs.begin(); streaks.begin();
     const vs = voices(B);
     for (const o of vs) {
       if (o.a <= .005) continue;
@@ -546,12 +655,21 @@
       const breath = 1 + .06 * Math.sin(t * 2.1);
       orbs.add(V, o.col, 1.25 * o.a, .9 * breath);
       orbs.add(V, WHITE, .55 * o.a, .26);
+      streaks.add(V, o.col, .32 * o.a * (.8 + .4 * eK), 7.5);
     }
     if (vs.length === 2 && B > 48 && B < 72) {                  // the meeting on D-flat: one white-violet light
       const m = clamp(1 - Math.abs(vs[0].p - vs[1].p) / 1.2);
-      if (m > 0) { pos((vs[0].p + vs[1].p) / 2, B, V); orbs.add(V, MERGE, 1.6 * m, 1.6 + .25 * Math.sin(t * 3)); }
+      if (m > 0) {
+        pos((vs[0].p + vs[1].p) / 2, B, V); orbs.add(V, MERGE, 1.6 * m, 1.6 + .25 * Math.sin(t * 3));
+        streaks.add(V, MERGE, .75 * m, 16);
+      }
     }
-    orbs.end();
+    for (let i = 0; i < NN; i++) {                             // a brief streak on each loud melody note
+      const n = NOTES[i]; if (n.on > t) break;
+      const age = t - n.on; if (age > .45 || !(n.hand === 'rh' && n.role === 'top') || n.v < 70) continue;
+      pos(n.p, n.B, V2); streaks.add(V2, WHITE, .22 * (n.v / 127) * (1 - age / .45) * reveal, 5);
+    }
+    orbs.end(); streaks.end();
   }
 
   // ---------------------------------------------------------------- kit interface (render.mjs)

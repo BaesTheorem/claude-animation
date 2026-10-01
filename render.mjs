@@ -28,6 +28,11 @@ if (!CHROME) { console.error('Chrome not found: pass --chrome=<path> or set CHRO
 const fps = +(args.fps || 24), FRAMES_DIR = 'out/frames';
 const run = (cmd, a) => new Promise((ok, bad) => { const p = spawn(cmd, a, { stdio: 'inherit' }); p.on('close', c => c ? bad(new Error(cmd + ' exited ' + c)) : ok()); });
 const times = s => String(s).split(',').map(Number);
+// Video codec flags for --clip and --encode. Default x264 (--preset, --crf). --vcodec=hevc_videotoolbox (or
+// h264_videotoolbox) uses the Mac's hardware encoder, with --vb=40M (bitrate) or --vq=60 (quality) and --tag=hvc1.
+const VCODEC = (preset, crf) => args.vcodec
+  ? ['-c:v', args.vcodec, ...(args.vb ? ['-b:v', args.vb] : []), ...(args.vq ? ['-q:v', String(args.vq)] : []), ...(args.tag ? ['-tag:v', args.tag] : [])]
+  : ['-c:v', 'libx264', '-preset', args.preset || preset, '-crf', String(args.crf || crf)];
 const span = s => String(s).split(':').map(Number);
 
 if (args.encode) {
@@ -35,7 +40,7 @@ if (args.encode) {
   console.log(`encoding ${n} frames → ${out}${audio ? ' with ' + audio : ''}`);
   await run('ffmpeg', ['-y', '-loglevel', 'error', '-stats', '-framerate', String(fps), '-i', `${FRAMES_DIR}/f%05d.jpg`,
     ...(audio ? ['-i', audio, '-map', '0:v', '-map', '1:a', '-c:a', 'aac', '-b:a', '192k', '-shortest'] : []),
-    '-c:v', 'libx264', '-preset', args.preset || 'slow', '-crf', String(args.crf || 17), '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out]);
+    ...VCODEC('slow', 17), '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out]);
   console.log('wrote ' + out);
   process.exit(0);
 }
@@ -120,7 +125,7 @@ if (args.sheet || args.strip) {
   const out = args.out || 'out/clip.mp4'; mkdirSync(dirname(out), { recursive: true });
   const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(fps), '-c:v', 'mjpeg', '-i', '-',
     ...(audio ? ['-ss', String(a), '-t', String(b - a), '-i', audio, '-map', '0:v', '-map', '1:a', '-c:a', 'aac', '-b:a', '192k', '-shortest'] : []),
-    '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out],
+    ...VCODEC('medium', 18), '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out],
     { stdio: ['pipe', 'inherit', 'inherit'] });
   const n = Math.round((b - a) * fps), start = Date.now();
   for (let i = 0; i < n; i++) {
