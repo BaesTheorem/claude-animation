@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Spark: Soul Sleeve</title>
+<style>
+  @font-face { font-family: 'ArchivoV'; src: url('src/spark/fonts/Archivo-VF.ttf') format('truetype'); font-weight: 100 900; font-stretch: 62% 125%; }
+  @font-face { font-family: 'FrauncesI'; src: url('src/spark/fonts/Fraunces-Italic-VF.ttf') format('truetype'); font-weight: 100 900; font-style: italic; }
+  html, body { margin: 0; background: #121212; color: #ddd; font: 13px system-ui, sans-serif; }
+  main { padding: 12px; display: grid; gap: 8px; }
+  canvas { width: min(100%, 1280px); aspect-ratio: 16 / 9; height: auto; }
+  .bar { display: flex; gap: 10px; align-items: center; max-width: 1280px; }
+  #scrub { flex: 1; }
+</style>
+<script src="src/spark/design.js"></script>
+<!-- Song data lives in the gitignored private/ folder (see private/README.md). The masked timeline,
+     with every word swapped for a placeholder, loads unless the page is opened with ?real=1. -->
+<script src="private/spark/features.js"></script>
+<script>document.write('<script src="private/spark/timeline' + (/[?&]real=1/.test(location.search) ? '' : '.masked') + '.js"><\/script>');</script>
+<script>window.PROJECT = { audio: 'private/spark/source.m4a' };</script>
+</head>
+<body>
+<main>
+  <canvas id="c" width="1920" height="1080"></canvas>
+  <div class="bar"><input id="scrub" type="range" min="0" max="199" step="0.0167" value="0"><span id="tt">loading</span></div>
+</main>
+<script src="src/spark/scene.js"></script>
+</body>
+</html>

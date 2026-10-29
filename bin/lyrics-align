@@ -1,0 +1,296 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.10,<3.13"
+# dependencies = ["librosa>=0.10", "numpy", "soundfile"]
+# ///
+"""Time every lyric word to the vocal stem, mark the song's structure, and score the timing.
+
+    bin/lyrics-align private/spark             align (if needed), build the timeline, print scores
+    bin/lyrics-align private/spark --realign   run the forced aligner again
+
+Inputs in the folder: lyrics.json (bin/lyrics-fetch), features.json (bin/audio-features),
+stems/htdemucs/mix/vocals.wav (Demucs). Optional: whisper_vocals_dtw.json, a whisper-cli
+-ojf transcript made with -nfa -dtw large.v3, used only as a second opinion.
+
+Outputs: timeline.json / timeline.js (window.TIMELINE, the real words) and
+timeline.masked.json / timeline.masked.js (each word swapped for a placeholder of the same
+length, except the title word). The page loads the masked file unless it is asked for the
+real one, so layout review never shows a lyric. Nothing printed here contains lyric text.
+
+Method
+    The words come from lyrics.json. Their times come from mist-vid's aligner
+    (mist-vid/mist_vid/align.py): CTC forced alignment with torchaudio's MMS_FA model, one
+    LRC line at a time inside its window, star tokens at both ends, then an onset repair.
+    This script adds word ends for held notes (vocal envelope), song sections (repeated
+    lines and LRC gap markers), hero words and function words.
+
+Judges (none of them is the aligner)
+    - Onset profile: vocal onset strength at the word starts, shifted -0.4..+0.4 s, against
+      random times. A sharp peak at 0 means the starts sit on sung onsets.
+    - LRC: line starts against 3 human-made LRCLIB timings. LRC lines lead the voice by a
+      few tenths of a second (the onset profile of the LRC times peaks late), so the signed
+      gap is expected to be positive.
+    - Whisper DTW word starts, an independent acoustic method, when the file is present.
+"""
+import argparse
+import json
+import re
+import subprocess
+from pathlib import Path
+
+import numpy as np
+
+ROOT = Path(__file__).resolve().parent.parent
+MIST_VID = Path.home() / "Documents" / "Exobrain harness" / "mist-vid"
+FUNCTION = {"a", "an", "the", "of", "to", "in", "on", "at", "for", "and", "or", "but", "with", "from", "by",
+            "as", "into", "onto", "than", "is", "are", "was", "be", "been", "were", "am"}
+SYL = "BA BE BI BO DA DE DO KA KE KO LA LE LO MA ME MO NA NE NO RA RE RO SA SE SO TA TE TO VA VE VO".split()
+
+
+def norm(w: str) -> str:
+    return re.sub(r"[^a-z]", "", w.lower())
+
+
+def placeholder(n: int, seed: int) -> str:
+    out, k = "", seed
+    while len(out) < n:
+        out += SYL[(k * 7 + len(out) * 13) % len(SYL)]
+        k += 1
+    return out[:n].capitalize()
+
+
+def run_aligner(d: Path, lyr: dict) -> None:
+    work = d / "mv" / "work"
+    work.mkdir(parents=True, exist_ok=True)
+    rows = sorted([(ln["t"], ln["text"]) for ln in lyr["lines"]] + [(g, "") for g in lyr["gaps"]])
+    (work / "lyrics_rows.json").write_text(json.dumps(
+        {"source": f"lrclib:{lyr['lrclib_ids'][0]}", "rows": [{"row": i, "t": t, "text": x} for i, (t, x) in enumerate(rows)]}))
+    code = ("import sys; sys.path.insert(0, sys.argv[1]); from mist_vid import align as AL; "
+            "AL.words('../stems/htdemucs/mix/vocals.wav')")
+    # mist-vid prints row ids and times only (its INVARIANTS); stderr carries library warnings.
+    r = subprocess.run([str(MIST_VID / ".venv" / "bin" / "python"), "-c", code, str(MIST_VID)],
+                       cwd=d / "mv", capture_output=True, text=True)
+    for line in r.stdout.splitlines():
+        print("  aligner:", line)
+    if r.returncode:
+        raise SystemExit(f"aligner exited {r.returncode}")
+
+
+def onset_profile(y, sr, times):
+    import librosa
+
+    hop = 441
+    env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop, aggregate=np.median)
+    env = env / (env.max() + 1e-9)
+
+    def at(ts, s):
+        return float(np.mean([env[max(0, int(round((t + s) * sr / hop)) - 3):int(round((t + s) * sr / hop)) + 4].max()
+                              for t in ts]))
+    shifts = np.round(np.arange(-0.40, 0.41, 0.05), 2)
+    prof = {float(s): at(times, s) for s in shifts}
+    rnd = np.random.default_rng(1).uniform(min(times), max(times), 2000)
+    return prof, at(rnd, 0)
+
+
+def whisper_starts(path: Path) -> list[tuple[str, float]]:
+    segs = json.loads(path.read_text(errors="replace")).get("transcription", [])
+    out: list[tuple[str, float]] = []
+    for s in segs:
+        for tok in s.get("tokens", []):
+            tx = tok.get("text", "")
+            if tx.startswith("[_"):
+                continue
+            if tx.startswith(" ") or not out:
+                out.append((norm(tx), tok.get("t_dtw", -1) / 100.0))
+            else:
+                out[-1] = (out[-1][0] + norm(tx), out[-1][1])
+    return [(w, t) for w, t in out if w and t >= 0]
+
+
+def main() -> None:
+    import soundfile as sf
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("folder", type=Path)
+    ap.add_argument("--realign", action="store_true")
+    a = ap.parse_args()
+    d = a.folder
+    lyr = json.loads((d / "lyrics.json").read_text())
+    feats = json.loads((d / "features.json").read_text())
+    fps, dur = feats["fps"], feats["duration"]
+    vdb = np.asarray(feats["vocal_db"])
+    wf = d / "mv" / "work" / "words_final.json"
+    if a.realign or not wf.exists():
+        run_aligner(d, lyr)
+        (d / "mv" / "work" / "words_final.before_repair.json").unlink(missing_ok=True)
+    if "repaired_rows" not in json.loads(wf.read_text()):
+        r = subprocess.run([str(MIST_VID / ".venv" / "bin" / "python"), str(ROOT / "bin" / "lyrics-repair.py"), str(d)],
+                           capture_output=True, text=True)
+        for line in r.stdout.splitlines():
+            print("  repair:", line)
+        if r.returncode:
+            raise SystemExit(f"lyrics-repair exited {r.returncode}")
+    wdoc = json.loads(wf.read_text())
+    ctc = wdoc["words"]
+    rows = json.loads((d / "mv" / "work" / "lyrics_rows.json").read_text())["rows"]
+    sung_rows = [r["row"] for r in rows if r["text"]]
+    row_to_line = {r: i for i, r in enumerate(sung_rows)}
+    repaired_lines = sorted(row_to_line[r] for r in wdoc.get("repaired_rows", []))
+
+    lines = lyr["lines"]
+    words = []
+    for w in ctc:
+        li = row_to_line[w["row"]]
+        disp = w["text"].strip("(),.;:\"")
+        words.append({"line": li, "k": w["w"], "raw": w["text"], "text": disp, "n": norm(disp),
+                      "t": float(w["t0"]), "e_ctc": float(w["t1"]), "interp": bool(w.get("interp"))})
+    # Parentheses mark backing vocals in LRC text.
+    for li in range(len(lines)):
+        inside = False
+        for w in (x for x in words if x["line"] == li):
+            if "(" in w["raw"]:
+                inside = True
+            w["paren"] = inside
+            if ")" in w["raw"]:
+                inside = False
+
+    def db_at(t):
+        return vdb[min(max(int(round(t * fps)), 0), len(vdb) - 1)]
+
+    # Ends: a held note keeps the word on until the vocal level falls; never past the next word.
+    for i, w in enumerate(words):
+        limit = words[i + 1]["t"] if i + 1 < len(words) else dur
+        peak = max(db_at(w["t"] + k / fps) for k in range(int(0.2 * fps)))
+        t, quiet = max(w["e_ctc"], w["t"] + 0.08), 0
+        while t < min(limit - 0.02, w["t"] + 4.0):
+            quiet = quiet + 1 if db_at(t) < max(peak - 12, -42) else 0
+            if quiet >= int(0.08 * fps):
+                t -= 0.08
+                break
+            t += 1 / fps
+        w["e"] = float(min(max(t, w["t"] + 0.08), limit - 0.01 if limit > w["t"] + 0.1 else limit))
+        fr = [db_at(w["t"] + k / fps) for k in range(max(1, int((w["e"] - w["t"]) * fps)))]
+        w["peak"], w["mean"] = float(np.max(fr)), float(np.mean(fr))
+
+    # Sections: runs of repeated / unique lines, split at LRC gap markers; one-line runs join the previous run.
+    texts = [norm(ln["text"]) for ln in lines]
+    rep = [texts.count(x) >= 2 for x in texts]
+    gap_after = [any(lines[i]["t"] < g < (lines[i + 1]["t"] if i + 1 < len(lines) else dur + 1) for g in lyr["gaps"])
+                 for i in range(len(lines))]
+    runs: list[list[int]] = [[0]]
+    for i in range(1, len(lines)):
+        if rep[i] != rep[i - 1] or gap_after[i - 1]:
+            runs.append([i])
+        else:
+            runs[-1].append(i)
+    merged: list[list[int]] = []
+    for r in runs:
+        if merged and len(r) == 1 and not gap_after[merged[-1][-1]]:
+            merged[-1].extend(r)
+        else:
+            merged.append(r)
+    sections, n_chorus = [], 0
+    for r in merged:
+        is_rep = sum(rep[i] for i in r) / len(r) >= 0.5
+        kind = "chorus" if is_rep else ("bridge" if n_chorus >= 2 else "verse")
+        n_chorus += is_rep
+        parts = [r] if len(r) <= 10 else [r[: len(r) // 2], r[len(r) // 2:]]
+        for pi, p in enumerate(parts):
+            sections.append({"kind": kind, "part": pi, "lines": p})
+    line_section = {}
+    for si, s in enumerate(sections):
+        ws = [w for w in words if w["line"] in s["lines"]]
+        s["start"], s["end"] = round(min(w["t"] for w in ws), 3), round(max(w["e"] for w in ws), 3)
+        s["i"] = si
+        for li in s["lines"]:
+            line_section[li] = si
+
+    title_n = norm(lyr["title"])
+    # A class id per distinct line text, so the page can find the hook without the text.
+    cls_of: dict[str, int] = {}
+    for x in texts:
+        cls_of.setdefault(x, len(cls_of))
+    out_lines = []
+    for li in range(len(lines)):
+        ws = [w for w in words if w["line"] == li]
+        content = [w for w in ws if w["n"] not in FUNCTION and not w["paren"]] or ws
+        titled = [w for w in content if w["n"] == title_n]
+        hero = titled[0] if titled else max(content, key=lambda w: (w["e"] - w["t"]) * (w["mean"] + 60))
+        for w in ws:
+            w["hero"], w["fn"], w["title"] = w is hero, w["n"] in FUNCTION, w["n"] == title_n
+        out_lines.append({"start": round(ws[0]["t"], 3), "end": round(max(w["e"] for w in ws), 3),
+                          "section": line_section[li], "repeat": rep[li], "cls": cls_of[texts[li]],
+                          "cls_count": texts.count(texts[li]), "words": ws})
+
+    def export(masked: bool) -> dict:
+        ls = []
+        for li, x in enumerate(out_lines):
+            ws = []
+            for wi, w in enumerate(x["words"]):
+                text = placeholder(len(w["text"]), li * 31 + wi) if masked and not w["title"] else w["text"]
+                ws.append({"t": round(w["t"], 3), "e": round(w["e"], 3), "text": text, "fn": w["fn"], "hero": w["hero"],
+                           "title": w["title"], "paren": w["paren"], "peak": round(w["peak"], 1),
+                           "mean": round(w["mean"], 1)})
+            ls.append({k: x[k] for k in ("start", "end", "section", "repeat", "cls", "cls_count")} | {"words": ws})
+        secs = [{k: s[k] for k in ("i", "kind", "part", "start", "end")} | {"lines": s["lines"]} for s in sections]
+        return {"meta": {"title": lyr["title"], "artist": lyr["artist"], "album": lyr["album"], "masked": masked,
+                         "duration": dur}, "lines": ls, "sections": secs}
+
+    for masked, name in ((False, "timeline"), (True, "timeline.masked")):
+        doc = export(masked)
+        (d / f"{name}.json").write_text(json.dumps(doc, ensure_ascii=False))
+        (d / f"{name}.js").write_text("window.TIMELINE = " + json.dumps(doc, ensure_ascii=False) + ";\n")
+
+    # ---- judges --------------------------------------------------------------------------
+    y, sr = sf.read(str(d / "stems" / "htdemucs" / "mix" / "vocals.wav"), dtype="float32")
+    y = y.mean(1) if y.ndim == 2 else y
+    starts = [w["t"] for w in words]
+    prof, ctrl = onset_profile(y, sr, starts)
+    best = max(prof, key=prof.get)
+    report: dict = {"words": len(words), "interpolated": sum(w["interp"] for w in words),
+                    "onset_peak_shift_s": best, "onset_at_0": round(prof[0.0], 3), "onset_control": round(ctrl, 3),
+                    "onset_ratio_to_control": round(prof[0.0] / ctrl, 2)}
+    lstarts = np.asarray([x["start"] for x in out_lines])
+    human = np.asarray([[ln["t"] for ln in lines]] + [v["starts"] for v in lyr.get("alt_versions", [])])
+    cons = np.median(human, axis=0)
+    g = lstarts - cons
+    lprof, _ = onset_profile(y, sr, list(cons))
+    report["lrc_consensus_gap"] = {"median_signed_s": round(float(np.median(g)), 3),
+                                   "median_abs_s": round(float(np.median(np.abs(g))), 3),
+                                   "p90_abs_s": round(float(np.percentile(np.abs(g), 90)), 3),
+                                   "lines_over_0.6s": int(np.sum(np.abs(g) > 0.6))}
+    keep = [i for i in range(len(lines)) if i not in repaired_lines]
+    report["lrc_consensus_gap_unrepaired_lines"] = {"lines": len(keep),
+                                                    "median_signed_s": round(float(np.median(g[keep])), 3),
+                                                    "median_abs_s": round(float(np.median(np.abs(g[keep]))), 3),
+                                                    "lines_over_0.6s": int(np.sum(np.abs(g[keep]) > 0.6))}
+    report["repaired_lines"] = repaired_lines
+    report["line_overlaps_left"] = int(sum(1 for i in range(1, len(out_lines))
+                                           if out_lines[i]["words"][0]["t"] < max(w["t"] for w in out_lines[i - 1]["words"]) + 0.12))
+    report["lrc_onset_peak_shift_s"] = max(lprof, key=lprof.get)
+    report["lrc_human_spread_median_s"] = round(float(np.median(human.max(0) - human.min(0))), 3)
+    wpath = d / "whisper_vocals_dtw.json"
+    if wpath.exists():
+        ws = whisper_starts(wpath)
+        diffs = []
+        for w in words:
+            cands = [t for n, t in ws if n == w["n"] and abs(t - w["t"]) < 1.0]
+            if cands:
+                diffs.append(min(cands, key=lambda t: abs(t - w["t"])) - w["t"])
+        dd = np.asarray(diffs)
+        wprof, _ = onset_profile(y, sr, [t for _, t in ws]) if ws else ({0.0: 0}, 0)
+        report["whisper_dtw"] = {"words": len(ws), "matched_within_1s": len(dd),
+                                 "median_signed_ms": round(float(np.median(dd)) * 1000) if len(dd) else None,
+                                 "median_abs_ms": round(float(np.median(np.abs(dd))) * 1000) if len(dd) else None,
+                                 "within_100ms": round(float(np.mean(np.abs(dd) <= 0.1)), 2) if len(dd) else None,
+                                 "onset_peak_shift_s": max(wprof, key=wprof.get)}
+    (d / "align_report.json").write_text(json.dumps(report, indent=1))
+    print(json.dumps(report, indent=1))
+    print("sections: " + " | ".join(f"{s['i']}:{s['kind']}{s['part'] or ''} {len(s['lines'])}L {s['start']:.1f}-{s['end']:.1f}s"
+                                    for s in sections))
+    print(f"title word occurrences: {sum(w['title'] for w in words)}; backing words: {sum(w['paren'] for w in words)}; "
+          f"function words: {sum(w['fn'] for w in words)}")
+
+
+if __name__ == "__main__":
+    main()

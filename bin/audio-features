@@ -1,0 +1,143 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.10,<3.13"
+# dependencies = ["librosa>=0.10", "numpy", "soundfile", "scipy"]
+# ///
+"""Measure a song for a lyric video: beat grid, downbeats, drum hits and loudness envelopes.
+
+    bin/audio-features private/spark            reads mix.wav and stems/htdemucs/mix/*.wav there
+    bin/audio-features private/spark --fps 60   envelope rate (one value per video frame)
+
+Writes features.json and features.js (window.FEATURES) into the same folder.
+The stems come from Demucs (htdemucs): drums.wav gives kick and snare hits, vocals.wav
+gives the vocal loudness that drives type weight, mix.wav gives the beat grid.
+
+Method
+    - Tempo from librosa's tracker, then the beat phase from a 5 ms scan of a fixed
+      grid against onset energy (the song-sync method). Studio pop is click-tracked,
+      so one fixed grid is checked against the tracker's own beats (drift reported).
+    - Kick = onsets of the drum stem below 150 Hz; snare = onsets of 1.5-6 kHz.
+    - Downbeat = the bar phase (0-3) with the most kick energy on beat 1 and the most
+      snare energy on beats 2 and 4. The winner's margin is printed.
+"""
+import argparse
+import json
+from pathlib import Path
+
+import numpy as np
+
+
+def band_onsets(y, sr, lo, hi, hop=256, delta=0.12):
+    import librosa
+    import scipy.signal as sg
+
+    sos = sg.butter(4, [lo, hi], btype="band", fs=sr, output="sos") if lo > 0 else sg.butter(4, hi, btype="low", fs=sr, output="sos")
+    yb = sg.sosfiltfilt(sos, y)
+    env = librosa.onset.onset_strength(y=yb, sr=sr, hop_length=hop)
+    frames = librosa.onset.onset_detect(onset_envelope=env, sr=sr, hop_length=hop, units="frames", backtrack=False, delta=delta)
+    times = librosa.frames_to_time(frames, sr=sr, hop_length=hop)
+    peak = float(env.max()) or 1.0
+    return [(round(float(t), 4), round(float(env[f]) / peak, 3)) for t, f in zip(times, frames)]
+
+
+def env_db(y, sr, fps):
+    hop = int(round(sr / fps))
+    n = int(np.ceil(len(y) / hop))
+    pad = np.pad(y, (hop, hop + n * hop - len(y)))
+    rms = np.array([np.sqrt(np.mean(pad[i * hop: i * hop + 2 * hop] ** 2)) for i in range(n)])
+    return np.round(20 * np.log10(np.maximum(rms, 1e-6)), 2)
+
+
+def main() -> None:
+    import librosa
+    import soundfile as sf
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("folder", type=Path)
+    ap.add_argument("--fps", type=int, default=60)
+    ap.add_argument("--bpm", type=float, help="pin the tempo")
+    a = ap.parse_args()
+    d = a.folder
+    stems = d / "stems" / "htdemucs" / "mix"
+
+    y, sr = librosa.load(str(d / "mix.wav"), sr=22050, mono=True)
+    duration = len(y) / sr
+    onset = librosa.onset.onset_strength(y=y, sr=sr)
+    kw = {"bpm": a.bpm} if a.bpm else {}
+    tempo, tracked = librosa.beat.beat_track(onset_envelope=onset, sr=sr, units="time", **kw)
+    bpm = float(a.bpm or np.atleast_1d(tempo)[0])
+    # Refine the tempo by a least-squares line through the tracked beats (fixed grid assumption).
+    tracked = np.asarray(tracked, float)
+    k = np.arange(len(tracked))
+    slope, icpt = np.polyfit(k, tracked, 1)
+    bpm_fit = 60.0 / slope
+    period = slope
+    times = librosa.times_like(onset, sr=sr)
+    energy = lambda off: onset[np.searchsorted(times, np.arange(off, times[-1], period)).clip(0, len(onset) - 1)].mean()
+    offs = np.arange(0, period, 0.005)
+    scores = np.array([energy(o) for o in offs])
+    first = float(offs[scores.argmax()])
+    ratio = scores.max() / max(energy((first + period / 2) % period), 1e-9)
+    grid = np.arange(first, duration, period)
+    # Drift: tracked beats against the nearest grid beat.
+    near = grid[np.abs(grid[:, None] - tracked[None, :]).argmin(axis=0)]
+    drift = tracked - near
+    print(f"duration {duration:.2f}s  tracker bpm {bpm:.2f}  line-fit bpm {bpm_fit:.3f}  first beat {first:.3f}s  "
+          f"phase ratio {ratio:.2f}x")
+    print(f"tracked beats vs fixed grid: median {np.median(np.abs(drift)) * 1000:.0f} ms, "
+          f"95th pct {np.percentile(np.abs(drift), 95) * 1000:.0f} ms over {len(tracked)} beats")
+
+    ds, dsr = sf.read(str(stems / "drums.wav"), always_2d=True)
+    dm = ds.mean(axis=1)
+    kick = band_onsets(dm, dsr, 0, 150)
+    snare = band_onsets(dm, dsr, 1500, 6000)
+    hats = band_onsets(dm, dsr, 7000, 14000, delta=0.2)
+
+    def strength_at(hits, t, win=0.06):
+        return max((s for ht, s in hits if abs(ht - t) <= win), default=0.0)
+
+    kick_on = np.array([strength_at(kick, t) for t in grid])
+    snare_on = np.array([strength_at(snare, t) for t in grid])
+    phase_scores = []
+    for p in range(4):
+        idx = np.arange(len(grid))
+        one = (idx - p) % 4 == 0
+        back = np.isin((idx - p) % 4, [1, 3])
+        phase_scores.append(float(kick_on[one].mean() + snare_on[back].mean() - snare_on[one].mean()))
+    p_best = int(np.argmax(phase_scores))
+    srt = sorted(phase_scores, reverse=True)
+    print(f"drum-pattern downbeat phase {p_best} (score {srt[0]:.3f} vs next {srt[1]:.3f}); "
+          f"kick {len(kick)}  snare {len(snare)}  hats {len(hats)} hits")
+    # beat_this (CPJKU, a neural beat and downbeat tracker) is the stronger instrument when its output
+    # is present: on Spark the drum-pattern margin was 0.368 vs 0.357, beat_this put 109/109 on one phase.
+    bt = d / "beat_this.json"
+    if bt.exists():
+        dbs = np.asarray(json.loads(bt.read_text())["downbeats"])
+        votes = np.bincount(np.abs(dbs[:, None] - grid[None, :]).argmin(axis=1) % 4, minlength=4)
+        p_best = int(votes.argmax())
+        print(f"beat_this downbeat votes by phase {votes.tolist()} -> phase {p_best}")
+
+    vs, vsr = sf.read(str(stems / "vocals.wav"), always_2d=True)
+    voc_db = env_db(vs.mean(axis=1), vsr, a.fps)
+    ms, msr = sf.read(str(d / "mix.wav"), always_2d=True)
+    mix_db = env_db(ms.mean(axis=1), msr, a.fps)
+    drum_db = env_db(dm, dsr, a.fps)
+    print(f"envelopes at {a.fps} fps: {len(voc_db)} frames; vocal dB p10/p50/p90 "
+          f"{np.percentile(voc_db, 10):.1f}/{np.percentile(voc_db, 50):.1f}/{np.percentile(voc_db, 90):.1f}; "
+          f"mix p50 {np.percentile(mix_db, 50):.1f}")
+
+    beats = [round(float(t), 4) for t in grid]
+    doc = {
+        "duration": round(duration, 3), "bpm": round(bpm_fit, 3), "period": round(period, 5), "first_beat": round(first, 4),
+        "beats": beats, "downbeat_phase": p_best,
+        "downbeats": [b for i, b in enumerate(beats) if (i - p_best) % 4 == 0],
+        "kick": kick, "snare": snare, "hats": hats,
+        "fps": a.fps, "vocal_db": voc_db.tolist(), "mix_db": mix_db.tolist(), "drum_db": drum_db.tolist(),
+    }
+    (d / "features.json").write_text(json.dumps(doc))
+    (d / "features.js").write_text("window.FEATURES = " + json.dumps(doc) + ";\n")
+    print(f"wrote {d / 'features.json'} and features.js")
+
+
+if __name__ == "__main__":
+    main()

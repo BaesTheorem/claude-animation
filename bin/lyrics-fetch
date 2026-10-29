@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""Fetch a song's lyrics and line times from LRCLIB into private/<slug>/lyrics.json.
+
+    bin/lyrics-fetch spark "Fitz and the Tantrums" "Spark" --duration 199
+    bin/lyrics-fetch spark ... --cache private/spark/lrclib_search.json   # no network
+
+The lyrics are someone else's copyrighted text. They go only to the gitignored
+private/ folder, and this script prints counts and metadata, never a lyric.
+Every other tool that touches them follows the same rule; bin/lyricguard masks
+any lyric phrase that leaks into command output anyway.
+
+Choice of record: LRCLIB holds many copies of a song. Records whose duration is
+within --tolerance seconds of the audio are kept, the synced text that most of
+them share (the consensus) wins, and the other synced versions are kept as
+independent human timings for bin/lyrics-align to score against.
+
+INVARIANTS
+    - Nothing printed contains lyric text.
+    - Output lives under private/, which .gitignore excludes.
+"""
+import argparse
+import hashlib
+import json
+import re
+import subprocess
+import sys
+import time
+import urllib.parse
+from collections import Counter
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+UA = "exobrain-harness/1.0 (+https://github.com/BaesTheorem/exobrain-harness)"
+LRC_LINE = re.compile(r"^\[(\d+):(\d+(?:\.\d+)?)\](.*)$")
+
+
+def search(artist: str, title: str) -> list[dict]:
+    q = urllib.parse.urlencode({"track_name": title, "artist_name": artist})
+    for attempt in range(6):
+        # curl, not urllib: LRCLIB answered urllib with 503 while curl got 200 (2026-10-29).
+        r = subprocess.run(["curl", "-sS", "-A", UA, "-w", "\n%{http_code}", "https://lrclib.net/api/search?" + q],
+                           capture_output=True, text=True)
+        body, _, code = r.stdout.rpartition("\n")
+        if code == "200":
+            data = json.loads(body)
+            if isinstance(data, list):
+                return data
+        print(f"LRCLIB attempt {attempt + 1}: HTTP {code or 'none'}", file=sys.stderr)
+        time.sleep(3 * (attempt + 1))
+    raise SystemExit("LRCLIB did not answer with a record list")
+
+
+def parse_synced(s: str | None) -> list[tuple[float, str]]:
+    out = []
+    for line in (s or "").splitlines():
+        m = LRC_LINE.match(line.strip())
+        if m:
+            out.append((round(int(m[1]) * 60 + float(m[2]), 3), m[3].strip()))
+    return out
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("slug")
+    ap.add_argument("artist")
+    ap.add_argument("title")
+    ap.add_argument("--duration", type=float, required=True, help="audio length in seconds")
+    ap.add_argument("--tolerance", type=float, default=4.0)
+    ap.add_argument("--cache", type=Path, help="a saved LRCLIB search response")
+    a = ap.parse_args()
+
+    out_dir = ROOT / "private" / a.slug
+    out_dir.mkdir(parents=True, exist_ok=True)
+    records = json.loads(a.cache.read_text()) if a.cache else search(a.artist, a.title)
+    if not a.cache:
+        (out_dir / "lrclib_search.json").write_text(json.dumps(records))
+
+    near = [r for r in records if r.get("syncedLyrics") and abs((r.get("duration") or 0) - a.duration) <= a.tolerance]
+    if not near:
+        raise SystemExit(f"{len(records)} records, none synced within {a.tolerance}s of {a.duration}s")
+    versions: dict[str, list[dict]] = {}
+    for r in near:
+        key = hashlib.sha1(json.dumps(parse_synced(r["syncedLyrics"])).encode()).hexdigest()
+        versions.setdefault(key, []).append(r)
+    ranked = sorted(versions.values(), key=lambda rs: (-len(rs), min(abs(r["duration"] - a.duration) for r in rs)))
+    main_rec = ranked[0][0]
+    lines = parse_synced(main_rec["syncedLyrics"])
+    sung = [(t, x) for t, x in lines if x]
+    gaps = [t for t, x in lines if not x]
+
+    # Other synced versions: their start time for each sung line, matched by line text in order.
+    alts = []
+    for rs in ranked[1:]:
+        other = [(t, x) for t, x in parse_synced(rs[0]["syncedLyrics"]) if x]
+        if [x.lower() for _, x in other] == [x.lower() for _, x in sung]:
+            alts.append({"lrclib_ids": [r["id"] for r in rs], "starts": [t for t, _ in other]})
+
+    plain_texts = Counter((r.get("plainLyrics") or "").strip().lower() for r in records)
+    doc = {
+        "source": "lrclib", "lrclib_ids": [r["id"] for r in ranked[0]],
+        "artist": main_rec["artistName"], "title": main_rec["trackName"], "album": main_rec["albumName"],
+        "duration": main_rec["duration"],
+        "lines": [{"t": t, "text": x} for t, x in sung],
+        "gaps": gaps,
+        "alt_versions": alts,
+    }
+    (out_dir / "lyrics.json").write_text(json.dumps(doc, ensure_ascii=False, indent=1))
+    words = sum(len(x.split()) for _, x in sung)
+    paren = sum(1 for _, x in sung if "(" in x)
+    print(f"{a.artist} - {a.title}: {len(records)} LRCLIB records, {len(versions)} synced versions near {a.duration}s")
+    print(f"consensus version: {len(ranked[0])} records; {len(sung)} sung lines, {words} words, "
+          f"{len(gaps)} gap markers, {paren} lines with parentheses")
+    print(f"independent timings kept: {len(alts)}; distinct plain texts across records: {len(plain_texts)}")
+    print(f"wrote {out_dir.relative_to(ROOT)}/lyrics.json")
+
+
+if __name__ == "__main__":
+    main()

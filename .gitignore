@@ -3,3 +3,9 @@ out/
 assets/*.mp3
 assets/*.wav
 assets/*.flac
+
+# Song data for lyric videos (copyrighted lyrics, timings, stems): never commit
+private/*
+!private/README.md
+# song-sync --lyrics output holds lyric text; commit it only for lyrics that are public domain or our own (git add -f)
+src/lyrics.js

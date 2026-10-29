@@ -16,7 +16,8 @@ by one beat (60 / bpm s) if the bounce lands on the off-beat.
 
 --lyrics takes the timings.json from the harness lyrics-video pipeline (whisper word times
 aligned to the exact lyrics) and writes `const LYRICS = [{ text, start, end }, ...]` to
-src/lyrics.js, adding its script tag to studio.html. The kit's rule stands: lyrics are cues
+src/lyrics.js, adding its script tag to studio.html. src/lyrics.js is gitignored because it holds
+lyric text: this fork is public, so `git add -f` it only for lyrics that are public domain or our own. The kit's rule stands: lyrics are cues
 for what to act and when to cut, not text to put on screen.
 """
 import argparse
