@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- The still for the Mariah Carey containment-breach video: the hallway screenshot with an SCP alert banner.
+     Rendered to out/scp-mariah/still-alert.png by src/scp-mariah/build.sh (headless Chrome, 1920x1080). -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+  .stage { position: relative; width: 1920px; height: 1080px;
+           background: url(../../assets/scp-mariah/hallway.jpg) center / cover no-repeat; }
+  .alert { position: absolute; left: 50%; bottom: 80px; transform: translateX(-50%);
+           background: rgba(6, 6, 6, .86); border: 2px solid #c8161d; }
+  .bar { display: flex; align-items: center; gap: 18px; height: 62px; padding: 0 26px;
+         background: #c8161d; color: #fff; font: 700 26px/1 "DIN Alternate"; letter-spacing: .2em; }
+  .bar img { width: 40px; height: 40px; filter: invert(1); }
+  .bar .right { margin-left: auto; padding-left: 80px; }
+  .msg { padding: 36px 46px 8px; color: #fff; font: 700 124px/1 "DIN Condensed";
+         letter-spacing: .015em; text-transform: uppercase; white-space: nowrap; }
+  .meta { padding: 8px 46px 26px; color: #b5b5b5; font: 700 22px/1 "DIN Alternate"; letter-spacing: .24em; }
+  .hazard { height: 12px; background: repeating-linear-gradient(-45deg, #f2c200 0 14px, #111 14px 28px); }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="alert">
+    <div class="bar"><img src="../../assets/scp-mariah/scp-emblem.svg" alt=""><span>SCP FOUNDATION</span><span class="right">SECURITY ALERT</span></div>
+    <div class="msg">Containment Breach</div>
+    <div class="meta">SITE-19 &middot; 01 NOV &middot; 00:00</div>
+    <div class="hazard"></div>
+  </div>
+</div>
+</body>
+</html>

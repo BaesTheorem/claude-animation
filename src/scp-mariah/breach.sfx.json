@@ -1,0 +1,432 @@
+{
+ "_about": "Containment breach: the opening of All I Want for Christmas Is You, heard from deep inside an SCP site. The song is in private/ (not in git). Times: the song starts at t=2.5; in the song the groove starts at 49.81 s and the bass and drums at 54.80 s (152 BPM, bars of 1.598 s), so t = song time + 2.5. The door slams on the downbeat 8 bars after the bass entry (t=70.07).",
+ "duration": 82.5,
+ "sfx_dir": "assets/sfx/scp-mariah",
+ "loudness": -18,
+ "seed": 1225,
+ "spaces": {
+  "cell": [
+   {
+    "mono": true
+   },
+   {
+    "ir": "assets/ir/command-post.wav",
+    "wet": 0.9,
+    "dry": 0.5
+   },
+   {
+    "lowpass": 650,
+    "order": 1
+   },
+   {
+    "ir": "assets/ir/battery-randol.wav",
+    "wet": 1.0,
+    "dry": 0.12,
+    "direct": 0.4
+   },
+   {
+    "highpass": 70,
+    "order": 2
+   }
+  ],
+  "deep": [
+   {
+    "mono": true
+   },
+   {
+    "lowpass": 800,
+    "order": 2
+   },
+   {
+    "ir": [
+     "assets/ir/command-post.wav",
+     "assets/ir/battery-randol.wav"
+    ],
+    "wet": 1.0,
+    "dry": 0.02
+   },
+   {
+    "highpass": 70,
+    "order": 2
+   }
+  ],
+  "far_l": [
+   {
+    "mono": true
+   },
+   {
+    "lowpass": 1400,
+    "order": 2
+   },
+   {
+    "ir": "assets/ir/battery-randol.wav",
+    "wet": 1.0,
+    "dry": 0.08,
+    "direct": 0.5
+   }
+  ],
+  "far_r": [
+   {
+    "mono": true
+   },
+   {
+    "lowpass": 1400,
+    "order": 2
+   },
+   {
+    "ir": "assets/ir/battery-randol.wav",
+    "wet": 1.0,
+    "dry": 0.08,
+    "direct": 0.5
+   },
+   {
+    "swap": true
+   }
+  ],
+  "mid_l": [
+   {
+    "mono": true
+   },
+   {
+    "lowpass": 3000,
+    "order": 1
+   },
+   {
+    "ir": "assets/ir/battery-randol.wav",
+    "wet": 0.9,
+    "dry": 0.3
+   }
+  ],
+  "mid_r": [
+   {
+    "mono": true
+   },
+   {
+    "lowpass": 3000,
+    "order": 1
+   },
+   {
+    "ir": "assets/ir/battery-randol.wav",
+    "wet": 0.9,
+    "dry": 0.3
+   },
+   {
+    "swap": true
+   }
+  ],
+  "alarm": [
+   {
+    "mono": true
+   },
+   {
+    "lowpass": 1800,
+    "order": 2
+   },
+   {
+    "ir": "assets/ir/battery-randol.wav",
+    "wet": 1.0,
+    "dry": 0.15
+   }
+  ],
+  "room": [
+   {
+    "ir": "assets/ir/graffiti-hallway.wav",
+    "wet": 0.2,
+    "dry": 1.0
+   }
+  ],
+  "door": [
+   {
+    "mono": true
+   },
+   {
+    "ir": "assets/ir/battery-randol.wav",
+    "wet": 0.6,
+    "dry": 0.8
+   }
+  ],
+  "pa": [
+   {
+    "mono": true
+   },
+   {
+    "highpass": 300,
+    "order": 2
+   },
+   {
+    "lowpass": 3800,
+    "order": 2
+   },
+   {
+    "ir": "assets/ir/battery-randol.wav",
+    "wet": 0.5,
+    "dry": 0.75
+   }
+  ]
+ },
+ "buses": {
+  "song": [
+   {
+    "t": 70.07,
+    "ramp": 0.06,
+    "chain": [
+     {
+      "lowpass": 260,
+      "order": 2
+     },
+     {
+      "db": -10
+     }
+    ]
+   }
+  ],
+  "far": [
+   {
+    "t": 70.07,
+    "ramp": 0.06,
+    "chain": [
+     {
+      "lowpass": 260,
+      "order": 2
+     },
+     {
+      "db": -10
+     }
+    ]
+   }
+  ],
+  "alarm": [
+   {
+    "t": 70.07,
+    "ramp": 0.06,
+    "chain": [
+     {
+      "lowpass": 260,
+      "order": 2
+     },
+     {
+      "db": -10
+     }
+    ]
+   }
+  ]
+ },
+ "cues": [
+  {
+   "t": 0,
+   "src": "fs119910.mp3",
+   "loop": true,
+   "dur": 82.5,
+   "fade_in": 1.5,
+   "fade": 1.0,
+   "level": -26,
+   "space": "room",
+   "bus": "near"
+  },
+  {
+   "t": 0,
+   "src": "scpcb_lowdrone.ogg",
+   "loop": true,
+   "dur": 82.5,
+   "fade_in": 1.5,
+   "fade": 1.0,
+   "level": -26,
+   "space": "room",
+   "bus": "near"
+  },
+  {
+   "t": 2.5,
+   "src": "./private/scp-mariah/song.m4a",
+   "dur": 6.6,
+   "fade": 0.6,
+   "gain": 1.256,
+   "space": "cell",
+   "bus": "song"
+  },
+  {
+   "t": 8.5,
+   "src": "./private/scp-mariah/song.m4a",
+   "offset": 6.0,
+   "dur": 72.0,
+   "fade_in": 0.6,
+   "fade": 3.0,
+   "gain": 0.5,
+   "space": "cell",
+   "bus": "song"
+  },
+  {
+   "t": 14.5,
+   "src": "fs261419.mp3",
+   "level": -16,
+   "space": "deep",
+   "bus": "far"
+  },
+  {
+   "t": 26.5,
+   "src": "fs427596.mp3",
+   "level": -16,
+   "space": "deep",
+   "bus": "far"
+  },
+  {
+   "t": 27.05,
+   "src": "fs427596.mp3",
+   "level": -18,
+   "space": "deep",
+   "bus": "far"
+  },
+  {
+   "t": 34.8,
+   "src": "fs243381.mp3",
+   "level": -16,
+   "space": "deep",
+   "bus": "far"
+  },
+  {
+   "t": 43.5,
+   "src": "fs482122.mp3",
+   "level": -19,
+   "space": "deep",
+   "bus": "far"
+  },
+  {
+   "t": 49.0,
+   "src": "fs609973.mp3",
+   "level": -16,
+   "space": "deep",
+   "bus": "far"
+  },
+  {
+   "t": 52.31,
+   "src": "scpcb_Alarm.ogg",
+   "loop": true,
+   "dur": 26.0,
+   "fade_in": 0.2,
+   "fade": 3.0,
+   "level": -16,
+   "space": "alarm",
+   "bus": "alarm"
+  },
+  {
+   "t": 57.04,
+   "src": "fs418431.mp3",
+   "level": -15,
+   "space": "mid_l",
+   "bus": "far"
+  },
+  {
+   "t": 57.75,
+   "src": "fs391357.mp3",
+   "level": -15,
+   "space": "mid_r",
+   "bus": "far"
+  },
+  {
+   "t": 58.77,
+   "src": "fs201670.mp3",
+   "level": -15,
+   "space": "far_r",
+   "bus": "far"
+  },
+  {
+   "t": 58.4,
+   "src": "fs208893.mp3",
+   "level": -15,
+   "space": "far_l",
+   "bus": "far"
+  },
+  {
+   "t": 62.09,
+   "src": "fs482122.mp3",
+   "level": -15,
+   "space": "mid_r",
+   "bus": "far"
+  },
+  {
+   "t": 62.72,
+   "src": "fs169628.mp3",
+   "level": -15,
+   "space": "mid_l",
+   "bus": "far"
+  },
+  {
+   "t": 63.43,
+   "src": "fs418431.mp3",
+   "level": -15,
+   "space": "mid_r",
+   "bus": "far"
+  },
+  {
+   "t": 65.13,
+   "src": "fs201668.mp3",
+   "level": -15,
+   "space": "far_r",
+   "bus": "far"
+  },
+  {
+   "t": 65.7,
+   "src": "fs609973.mp3",
+   "level": -15,
+   "space": "mid_l",
+   "bus": "far"
+  },
+  {
+   "t": 66.75,
+   "src": "fs201670.mp3",
+   "level": -15,
+   "space": "far_l",
+   "bus": "far"
+  },
+  {
+   "t": 67.34,
+   "src": "fs243377.mp3",
+   "level": -15,
+   "space": "far_r",
+   "bus": "far"
+  },
+  {
+   "t": 68.23,
+   "src": "fs418431.mp3",
+   "level": -15,
+   "space": "mid_l",
+   "bus": "far"
+  },
+  {
+   "t": 68.9,
+   "src": "fs482122.mp3",
+   "level": -15,
+   "space": "mid_r",
+   "bus": "far"
+  },
+  {
+   "t": 66.77,
+   "src": "scpcb_BigDoorClose.ogg",
+   "level": -10,
+   "space": "door",
+   "bus": "near"
+  },
+  {
+   "t": 71.2,
+   "src": "scpcb_Announc.ogg",
+   "dur": 7.9,
+   "fade": 0.4,
+   "level": -4,
+   "space": "pa",
+   "bus": "near"
+  },
+  {
+   "t": 74.6,
+   "src": "fs418431.mp3",
+   "level": -15,
+   "space": "mid_r",
+   "bus": "far"
+  },
+  {
+   "t": 76.0,
+   "src": "fs261419.mp3",
+   "level": -15,
+   "space": "far_l",
+   "bus": "far"
+  }
+ ]
+}

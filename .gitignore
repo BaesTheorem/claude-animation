@@ -3,3 +3,10 @@ out/
 assets/*.mp3
 assets/*.wav
 assets/*.flac
+
+# Song data and third-party audio for the videos on this branch: never commit
+private/*
+!private/README.md
+# EchoThief impulse responses: licensed for an individual's creative works, not for redistribution
+assets/ir/*
+!assets/ir/README.md
