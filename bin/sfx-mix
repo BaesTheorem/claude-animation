@@ -1,12 +1,14 @@
 #!/usr/bin/env -S uv run --quiet --script
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["numpy"]
+# dependencies = ["numpy", "scipy", "pyloudnorm"]
 # ///
 """sfx-mix: lay sound effects on a timeline, mix them with the music and mux into a rendered video.
 
     bin/sfx-mix src/scenes/dungeon.sfx.json --video=out/dungeon.mp4 --out=out/dungeon_sfx.mp4
     bin/sfx-mix src/scenes/dungeon.sfx.json --wav=out/check/mix.wav          audio only, for checking
+    bin/sfx-mix src/scenes/x.sfx.json --still=assets/x.jpg --out=out/x.mp4    a still image as the picture
+    bin/sfx-mix src/scenes/x.sfx.json --wav=out/check/x.wav --meter=2         loudness per bus every 2 s
 
 The cue sheet (JSON):
     { "music": "assets/song.mp3", "music_gain": .7, "sfx_gain": .75, "duration": 31.5, "sfx_dir": "assets/sfx",
@@ -22,6 +24,26 @@ A cue places one sound at time t (seconds):
                 (birdie chirps, rate = chirps/s), "synth:hum" (a rising buzzy charge-up, f0 → f1), "synth:rain" (a rain
                 bed: hiss and droplets, different in each ear; rate = drops/s, attack = fade-in seconds), "synth:purr"
                 (a cat's purr: a low rumble pulsing rate times a second, breath = seconds per breath)
+  more:         fade_in (seconds), loop (repeat the file to fill dur), bus (a name, default "main"),
+                level (dBFS: scale the sound so its loudest 50 ms has this RMS, before gain and space, so files
+                recorded at different levels mix by number),
+                space (a named entry of "spaces", or an inline chain); a src that starts with "./" is a path from
+                the repo root (a song in private/, say), any other src is in sfx_dir
+Spaces put a sound somewhere: far down a corridor, behind a door, in another room. A space is a chain of steps,
+applied in order, each a dict:
+    {"mono": true}                                fold to mono first (a distant source is a point)
+    {"lowpass": 700, "order": 2}                  Butterworth; each order is 6 dB/octave (a wall, a closed door)
+    {"highpass": 120, "order": 2}
+    {"ir": "assets/ir/x.wav", "wet": 1, "dry": 0, "direct": .3, "predelay": .02}
+                                                  convolve with a measured impulse response (unit energy). "ir"
+                                                  may be a list, convolved in series (a room, then a corridor).
+                                                  direct scales the IR's first 5 ms, the direct path: < 1 = farther
+    {"gain": .5} or {"db": -6}, {"swap": true} (left and right), {"delay": .03}
+    "spaces": { "far": [ step, ... ], ... }
+Buses change over time, for a door that slams shut between the listener and everything on that bus:
+    "buses": { "far": [ {"t": 69.1, "ramp": .12, "chain": [ {"lowpass": 300, "order": 2}, {"db": -8} ]} ] }
+After t (crossfaded over ramp seconds) the bus is heard through that chain; a later event replaces an earlier one.
+"loudness": -18 sets the integrated loudness (ITU-R BS.1770, LUFS) of the mix before the soft limiter.
 Sounds are resampled to 48 kHz stereo by ffmpeg; the sum is soft-limited so stacked hits don't clip.
 """
 import argparse
@@ -36,16 +58,89 @@ SR = 48000
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def decode(path, rate=1.0, lowpass=None, offset=0.0, dur=None):
+def decode(path, rate=1.0, lowpass=None, offset=0.0, dur=None, loop=False):
     af = []
     if rate != 1.0:
         af += [f"asetrate={int(SR * rate)}", f"aresample={SR}"]
     if lowpass:
         af.append(f"lowpass=f={lowpass}")
-    cmd = ["ffmpeg", "-v", "error", "-ss", str(offset)] + (["-t", str(dur * rate)] if dur else []) + ["-i", str(path)]
+    if loop and not dur:
+        sys.exit(f"loop needs dur: {path}")
+    cmd = ["ffmpeg", "-v", "error"] + (["-stream_loop", "-1"] if loop else []) + ["-ss", str(offset)]
+    cmd += (["-t", str(dur * rate)] if dur else []) + ["-i", str(path)]
     cmd += (["-af", ",".join(af)] if af else []) + ["-f", "f32le", "-ac", "2", "-ar", str(SR), "-"]
     raw = subprocess.run(cmd, capture_output=True, check=True).stdout
     return np.frombuffer(raw, dtype=np.float32).reshape(-1, 2).copy()
+
+
+_IRS = {}
+
+
+def load_ir(path):
+    """A measured impulse response at 48 kHz stereo, from its onset, scaled to unit energy per channel."""
+    p = Path(path) if Path(path).is_absolute() else ROOT / path
+    if p not in _IRS:
+        ir = decode(p)
+        mag = np.abs(ir).max(axis=1)
+        on = int(np.argmax(mag > .1 * mag.max()))
+        ir = ir[max(0, on - SR // 1000):].astype(np.float64)
+        ir /= np.sqrt((ir ** 2).sum(axis=0).mean())
+        _IRS[p] = ir
+    return _IRS[p]
+
+
+def convolve(y, ir):
+    from scipy.signal import oaconvolve
+    return np.stack([oaconvolve(y[:, ch], ir[:, ch]) for ch in range(2)], axis=1)
+
+
+def pad(y, n):
+    return np.vstack([y, np.zeros((n - len(y), 2))]) if n > len(y) else y
+
+
+def place(y, chain):
+    """Run a sound through a space: the chain of steps documented at the top."""
+    from scipy.signal import butter, sosfilt
+    y = y.astype(np.float64)
+    for st in chain:
+        if st.get("mono"):
+            y = np.repeat(y.mean(axis=1, keepdims=True), 2, axis=1)
+        if "highpass" in st:
+            y = sosfilt(butter(st.get("order", 2), st["highpass"], "highpass", fs=SR, output="sos"), y, axis=0)
+        if "lowpass" in st:
+            y = sosfilt(butter(st.get("order", 2), st["lowpass"], "lowpass", fs=SR, output="sos"), y, axis=0)
+        if "ir" in st:
+            wet = y
+            for path in st["ir"] if isinstance(st["ir"], list) else [st["ir"]]:
+                ir = load_ir(path)
+                if st.get("direct", 1) != 1:
+                    ir = ir.copy(); ir[:int(.005 * SR)] *= st["direct"]
+                wet = convolve(wet, ir)
+            if st.get("predelay"):
+                wet = np.vstack([np.zeros((int(st["predelay"] * SR), 2)), wet])
+            n = max(len(wet), len(y))
+            y = pad(wet, n) * st.get("wet", 1.0) + pad(y, n) * st.get("dry", 0.0)
+        if "gain" in st:
+            y = y * st["gain"]
+        if "db" in st:
+            y = y * 10 ** (st["db"] / 20)
+        if st.get("swap"):
+            y = y[:, ::-1]
+        if st.get("delay"):
+            y = np.vstack([np.zeros((int(st["delay"] * SR), 2)), y])
+    return y.astype(np.float32)
+
+
+def automate(bus, events):
+    """Crossfade a bus into each event's chain at its time; a later event replaces an earlier one."""
+    out = bus.copy()
+    for ev in sorted(events, key=lambda e: e["t"]):
+        wet = place(bus, ev["chain"])[:len(bus)]
+        wet = pad(wet, len(bus)).astype(np.float32)
+        s, r = int(ev["t"] * SR), max(1, int(ev.get("ramp", .05) * SR))
+        m = np.clip((np.arange(len(bus)) - s) / r, 0, 1)[:, None]
+        out = out * (1 - m) + wet * m
+    return out
 
 
 def env(n, attack=.01, release=.1):
@@ -145,10 +240,18 @@ def expand(cues):
     return out
 
 
-def mix(sheet):
+def lufs(y):
+    """Integrated loudness in LUFS (ITU-R BS.1770 with its gates); -inf for silence or under a second of audio."""
+    import pyloudnorm
+    return pyloudnorm.Meter(SR).integrated_loudness(y.astype(np.float64)) if len(y) > SR else float("-inf")
+
+
+def mix(sheet, meter=None):
     dur = sheet["duration"]
-    bus = np.zeros((int(dur * SR) + SR, 2), dtype=np.float32)
+    n = int(dur * SR) + SR
+    buses = {}
     sfx_dir = ROOT / sheet.get("sfx_dir", "assets/sfx")
+    spaces = sheet.get("spaces", {})
     rng = np.random.default_rng(sheet.get("seed", 7))
     for c in expand(sheet["cues"]):
         j = c.get("jitter", 0)
@@ -160,19 +263,48 @@ def mix(sheet):
                 y = np.frombuffer(subprocess.run(["ffmpeg", "-v", "error", "-f", "f32le", "-ar", str(SR), "-ac", "2", "-i", "-", "-af", f"lowpass=f={c['lowpass']}",
                                                   "-f", "f32le", "-ac", "2", "-ar", str(SR), "-"], input=y.tobytes(), capture_output=True, check=True).stdout, dtype=np.float32).reshape(-1, 2).copy()
         else:
-            y = decode(sfx_dir / c["src"], rate, c.get("lowpass"), c.get("offset", 0), c.get("dur"))
+            src = ROOT / c["src"] if c["src"].startswith("./") else sfx_dir / c["src"]
+            y = decode(src, rate, c.get("lowpass"), c.get("offset", 0), c.get("dur"), c.get("loop", False))
+        if c.get("level") is not None:
+            w = int(.05 * SR)
+            peak = max(np.sqrt((y[i:i + w] ** 2).mean()) for i in range(0, max(1, len(y) - w + 1), w // 2))
+            y *= 10 ** (c["level"] / 20) / max(peak, 1e-9)
+        if c.get("fade_in"):
+            k = min(len(y), int(c["fade_in"] * SR)); y[:k] *= np.linspace(0, 1, k)[:, None]
         if c.get("fade"):
             k = min(len(y), int(c["fade"] * SR)); y[len(y) - k:] *= np.linspace(1, 0, k)[:, None]
+        if c.get("space"):
+            chain = spaces[c["space"]] if isinstance(c["space"], str) else c["space"]
+            y = place(y, chain)
+        bus = buses.setdefault(c.get("bus", "main"), np.zeros((n, 2), dtype=np.float32))
         s = int(c["t"] * SR); e = min(len(bus), s + len(y))
         bus[s:e] += y[:e - s] * gain
-    bus *= sheet.get("sfx_gain", 1.0)
-    sfx_peak = np.abs(bus).max()
+    total = np.zeros((n, 2), dtype=np.float32)
+    for name, bus in buses.items():
+        if name in sheet.get("buses", {}):
+            bus = buses[name] = automate(bus, sheet["buses"][name])
+        total += bus
+    total *= sheet.get("sfx_gain", 1.0)
+    sfx_peak = np.abs(total).max()
     if sheet.get("music"):
         m = decode(ROOT / sheet["music"]) * sheet.get("music_gain", .7)
-        k = min(len(bus), len(m)); bus[:k] += m[:k]
-    bus = bus[:int(dur * SR)]
-    out = np.tanh(bus * 1.1) / np.tanh(1.1) * .8   # soft limiter with a ceiling low enough that AAC's intersample peaks stay under 0 dBFS
-    print(f"{len(expand(sheet['cues']))} sfx hits, sfx peak {sfx_peak:.2f}, mix peak {np.abs(bus).max():.2f} before limiting")
+        k = min(len(total), len(m)); total[:k] += m[:k]
+    total = total[:int(dur * SR)]
+    gain = 1.0
+    if sheet.get("loudness") is not None:
+        gain = 10 ** ((sheet["loudness"] - lufs(total)) / 20)
+        total *= gain
+    out = np.tanh(total * 1.1) / np.tanh(1.1) * .8   # soft limiter with a ceiling low enough that AAC's intersample peaks stay under 0 dBFS
+    print(f"{len(expand(sheet['cues']))} sfx hits, sfx peak {sfx_peak:.2f}, mix peak {np.abs(total).max():.2f} before limiting"
+          + (f", loudness gain {20 * np.log10(gain):+.1f} dB, out {lufs(out):.1f} LUFS" if gain != 1.0 else ""))
+    if meter:
+        names = sorted(buses)
+        print("   t   " + "".join(f"{b[:10]:>11}" for b in names) + "        mix   (LUFS, 3 s windows)")
+        w = int(3 * SR)
+        for t in np.arange(0, dur, meter):
+            i = int(t * SR)
+            row = [lufs(buses[b][i:i + w] * sheet.get("sfx_gain", 1.0) * gain) for b in names] + [lufs(out[i:i + w])]
+            print(f"{t:6.1f} " + "".join(f"{v:11.1f}" for v in row))
     return out.astype(np.float32)
 
 
@@ -182,14 +314,27 @@ def main():
     ap.add_argument("--video", type=Path)
     ap.add_argument("--out", type=Path)
     ap.add_argument("--wav", type=Path)
+    ap.add_argument("--still", type=Path, help="make the picture from this image (needs --out)")
+    ap.add_argument("--meter", type=float, help="print the loudness of each bus every N seconds")
     a = ap.parse_args()
-    audio = mix(json.loads(a.sheet.read_text()))
+    if a.still and not a.out:
+        sys.exit("--still needs --out")
+    sheet = json.loads(a.sheet.read_text())
+    audio = mix(sheet, a.meter)
     wav = a.wav or Path("out/check/_mix.f32")
     wav.parent.mkdir(parents=True, exist_ok=True)
     raw = wav.with_suffix(".f32"); audio.tofile(raw)
     if a.wav:
         subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "f32le", "-ar", str(SR), "-ac", "2", "-i", str(raw), str(a.wav)], check=True)
         print(f"wrote {a.wav}")
+    if a.still:
+        a.out.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-loop", "1", "-framerate", "30", "-i", str(a.still),
+                        "-f", "f32le", "-ar", str(SR), "-ac", "2", "-i", str(raw), "-map", "0:v", "-map", "1:a",
+                        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p", "-c:v", "libx264", "-tune", "stillimage",
+                        "-crf", "20", "-g", "600", "-c:a", "aac", "-b:a", "192k", "-t", str(sheet["duration"]),
+                        "-movflags", "+faststart", str(a.out)], check=True)   # -t, not -shortest: a looped image overshoots it
+        print(f"wrote {a.out}")
     if a.video:
         out = a.out or a.video.with_name(a.video.stem + "_sfx.mp4")
         subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(a.video), "-f", "f32le", "-ar", str(SR), "-ac", "2", "-i", str(raw),
