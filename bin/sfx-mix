@@ -21,7 +21,9 @@ A cue places one sound at time t (seconds):
                 f0 → f1), "synth:bubbles" (dense little bubble blips, rate = bubbles/s), "synth:tweet"
                 (birdie chirps, rate = chirps/s), "synth:hum" (a rising buzzy charge-up, f0 → f1), "synth:rain" (a rain
                 bed: hiss and droplets, different in each ear; rate = drops/s, attack = fade-in seconds), "synth:purr"
-                (a cat's purr: a low rumble pulsing rate times a second, breath = seconds per breath)
+                (a cat's purr: a low rumble pulsing rate times a second, breath = seconds per breath), "synth:boom" (a
+                trailer impact: a sub falling f0 → f1, try 110 → 36 over 1.6 s), "synth:riser" (a noise band and tone
+                rising f0 → f1 and swelling into a hard stop: start it one bar before the hit, dur = that bar)
 Sounds are resampled to 48 kHz stereo by ffmpeg; the sum is soft-limited so stacked hits don't clip.
 """
 import argparse
@@ -56,6 +58,21 @@ def env(n, attack=.01, release=.1):
     return e
 
 
+def sweep_noise(n, f0, f1, width, rng):
+    """A band of noise whose centre glides f0 → f1 (log-spaced), normalised to a peak of 1."""
+    hop, win = 512, 2048
+    frames = n // hop + 1
+    freqs = np.fft.rfftfreq(win, 1 / SR)
+    out = np.zeros(n + win)
+    w = np.hanning(win)
+    for i in range(frames):
+        fc = f0 * (f1 / f0) ** (i / max(1, frames - 1))
+        mag = np.exp(-.5 * ((np.log(freqs + 1) - np.log(fc)) / width) ** 2)
+        out[i * hop:i * hop + win] += np.fft.irfft(mag * np.exp(2j * np.pi * rng.random(len(freqs)))) * w
+    y = out[:n]
+    return y / (np.abs(y).max() + 1e-9)
+
+
 def synth(kind, c, rng):
     dur = c.get("dur", 1.0)
     n = int(dur * SR)
@@ -66,19 +83,18 @@ def synth(kind, c, rng):
         y = np.sin(2 * np.pi * np.cumsum(f) / SR) + .08 * rng.standard_normal(n) * np.sin(2 * np.pi * np.cumsum(f) / SR) ** 2
         y *= env(n, .03, .15) * .5
     elif kind == "whoosh":   # a band of noise sweeping f0 → f1, built in the STFT domain
-        hop, win = 512, 2048
-        frames = n // hop + 1
-        freqs = np.fft.rfftfreq(win, 1 / SR)
-        out = np.zeros(n + win)
-        w = np.hanning(win)
-        for i in range(frames):
-            k = i / max(1, frames - 1)
-            fc = f0 * (f1 / f0) ** k
-            mag = np.exp(-.5 * ((np.log(freqs + 1) - np.log(fc)) / c.get("width", .45)) ** 2)
-            spec = mag * np.exp(2j * np.pi * rng.random(len(freqs)))
-            out[i * hop:i * hop + win] += np.fft.irfft(spec) * w
-        y = out[:n]
-        y = y / (np.abs(y).max() + 1e-9) * np.sin(np.pi * np.clip(t / dur, 0, 1)) ** 1.5 * .6
+        y = sweep_noise(n, f0, f1, c.get("width", .45), rng) * np.sin(np.pi * np.clip(t / dur, 0, 1)) ** 1.5 * .6
+    elif kind == "boom":   # a trailer impact: a sub sine falling f0 → f1 with a long tail, over a short low thump
+        f = f1 + (f0 - f1) * np.exp(-t / (dur * .15))
+        sub = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t / (dur * .32))
+        fr = np.fft.rfftfreq(n, 1 / SR)
+        thump = np.fft.irfft(np.fft.rfft(rng.standard_normal(n) * np.exp(-t / .015)) * (fr < 700), n)
+        y = np.tanh(1.8 * (sub + .6 * thump / (np.abs(thump).max() + 1e-9))) * env(n, .002, .15) * .75
+    elif kind == "riser":   # a build into a hit: a noise band and a buzzy tone rising f0 → f1, swelling to a hard stop
+        f = f0 * (f1 / f0) ** (t / dur)
+        ph = 2 * np.pi * np.cumsum(f) / SR
+        tone = sum(np.sin(h * ph) / h for h in range(1, 6))
+        y = (.25 * tone / 2 + .55 * sweep_noise(n, f0 * 4, f1 * 6, .6, rng)) * (t / dur) ** 2.2 * env(n, .05, .008) * .9
     elif kind == "bubbles":   # Minnaert-style bubbles: short decaying sine chirps that rise in pitch
         y = np.zeros(n)
         for _ in range(int(c.get("rate", 12) * dur)):
