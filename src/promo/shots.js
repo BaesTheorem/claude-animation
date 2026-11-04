@@ -376,12 +376,14 @@ export function build(M, A, MU) {
   const mPlayers = M.shared_games.map(g => ({ g, me: g.me.map(n => meRow[n]), opp: g.opp.map(n => opRow[n]) }));
   const findGame = name => mPlayers.find(x => x.me.some(r => r.name === name) || x.opp.some(r => r.name === name));
   const venueTitle = g => (g.country && g.country !== 'USA' ? `LIVE FROM ${up(g.city)}` : null);
+  // the copy is a neutral broadcaster's: teams by name, never "we" or "our"
+  const poss = n => (n.endsWith('S') ? `${n}'` : `${n}'S`);
 
   const gCin = findGame("Ja'Marr Chase"), gKC = findGame('Kenneth Walker III'), gMia = findGame('Jahmyr Gibbs'), gGB = findGame('Christian Watson');
   const S8 = battle({
     title: venueTitle(gCin.g) || 'THE BENGALS, SPLIT', info: gameLine(gCin.g.home, ' vs '), logos: [A.nfl[gCin.g.away], A.nfl[gCin.g.home]],
     left: [[R_('me', "Ja'Marr Chase"), 'chase_dance', 460]], right: [[R_('opp', 'Joe Burrow'), 'burrow_point', 400]],
-    center: { key: 'chase_burrow', h: 400 }, tag: 'EVERY CHASE CATCH IS A BURROW COMPLETION',
+    center: { key: 'chase_burrow', h: 400 }, tag: 'BURROW THROWS. CHASE CATCHES. BOTH TEAMS SCORE.',
   });
   const S9 = battle({
     title: 'TWO DOLPHINS. ONE LION.', info: gameLine(gMia.g.home), logos: [A.nfl[gMia.g.home], A.nfl[gMia.g.away]],
@@ -398,7 +400,7 @@ export function build(M, A, MU) {
     title: 'FOXBOROUGH', info: gameLine(gGB.g.home), logos: [A.nfl[gGB.g.away], A.nfl[gGB.g.home]],
     left: [[R_('me', 'Christian Watson'), 'watson_td', 420]],
     right: [[R_('opp', 'Tucker Kraft'), 'kraft_leap', 225], [R_('opp', 'Patriots D/ST'), null, 200, A.nfl.NE]],
-    tag: 'THEIR DEFENSE. OUR RECEIVER.',
+    tag: `${poss(up(op.name))} DEFENSE VS. ${poss(up(me.name))} RECEIVER`,
   });
 
   // ================= S12: the lineups =================
