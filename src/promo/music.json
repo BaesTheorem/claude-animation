@@ -28,5 +28,7 @@
  ],
  "beat": 0.4799,
  "dur": 58.76,
- "note": "Juggernaut intro downbeats 0-11, then the drop cuts to the climax downbeat at track 188.20 s; D[23] is the track's final release at 209.32 s."
+ "note": "Juggernaut intro downbeats 0-11, then the drop cuts to the climax downbeat at track 188.20 s; D[23] is the track's final release at 209.32 s.",
+ "climax_from": 188.198,
+ "track_end": 221.95
 }
