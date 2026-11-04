@@ -48,7 +48,7 @@ export function build(M, A) {
   const sideGlowL = glow(1400), sideGlowR = glow(1400);
 
   function bug(t) {
-    if (t < D[0] || t >= D[20]) return;
+    if (t < D[0] || t >= D[20] || t >= D[12]) return;   // the matchup shots carry their own team labels, and their captions reach the corner
     const o = seg(t, D[0] + .4, D[0] + .8);
     bugSlab.show({ x: 790, y: -490, z: -CAMZ, o: o * .95, order: 90 });
     bugWeek.show({ x: 790, y: -490, z: -CAMZ, o, order: 91 });
