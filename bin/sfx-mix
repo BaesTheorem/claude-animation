@@ -25,6 +25,17 @@ A cue places one sound at time t (seconds):
                 trailer impact: a sub falling f0 → f1, try 110 → 36 over 1.6 s), "synth:riser" (a noise band and tone
                 rising f0 → f1 and swelling into a hard stop: start it one bar before the hit, dur = that bar)
 Sounds are resampled to 48 kHz stereo by ffmpeg; the sum is soft-limited so stacked hits don't clip.
+
+Trailer-style mixing (all optional):
+  "music" as a list of segments edits the track: { "src", "from", "to", "at", "gain", "fade_in", "fade_out" } puts
+                track time [from, to) at video time `at`. Hide an edit under a hit or a silence.
+  "automation": music-bus moves over [t0, t1]: { "type": "gain", "db0", "db1", "hold" } ramps in dB (hold keeps db1
+                after t1); { "type": "lowpass", "f0", "f1" } glides a 12 dB/oct lowpass f0 → f1 Hz (the muffled suck-out
+                before a drop).
+  cue "duck": dB the music dips under that cue (10 ms attack, "duck_hold", "duck_release" s), measured from
+                "duck_at" s into the cue (put the sample's hit there), so impacts punch through a dense track.
+  "master": { "lufs": -11, "ceiling": -1 } sets integrated loudness with ffmpeg, then a brick-wall limiter at the
+                ceiling (dBFS) in place of the soft limiter.
 """
 import argparse
 import json
@@ -184,12 +195,78 @@ def mix(sheet):
     bus *= sheet.get("sfx_gain", 1.0)
     sfx_peak = np.abs(bus).max()
     if sheet.get("music"):
-        m = decode(ROOT / sheet["music"]) * sheet.get("music_gain", .7)
-        k = min(len(bus), len(m)); bus[:k] += m[:k]
+        m = music_bus(sheet["music"], len(bus)) * sheet.get("music_gain", .7)
+        automate(m, sheet.get("automation", []))
+        duck(m, expand(sheet["cues"]))
+        bus += m
     bus = bus[:int(dur * SR)]
-    out = np.tanh(bus * 1.1) / np.tanh(1.1) * .8   # soft limiter with a ceiling low enough that AAC's intersample peaks stay under 0 dBFS
     print(f"{len(expand(sheet['cues']))} sfx hits, sfx peak {sfx_peak:.2f}, mix peak {np.abs(bus).max():.2f} before limiting")
+    if sheet.get("master"):
+        return master(bus, sheet["master"])
+    out = np.tanh(bus * 1.1) / np.tanh(1.1) * .8   # soft limiter with a ceiling low enough that AAC's intersample peaks stay under 0 dBFS
     return out.astype(np.float32)
+
+
+def music_bus(spec, n):
+    """The music: one file from 0, or an edit list of track segments placed on the video timeline."""
+    m = np.zeros((n, 2), dtype=np.float32)
+    for sg in (spec if isinstance(spec, list) else [{"src": spec}]):
+        a0 = sg.get("from", 0.0)
+        y = decode(ROOT / sg["src"], offset=a0, dur=(sg["to"] - a0) if "to" in sg else None)
+        fi, fo = int(sg.get("fade_in", 0) * SR), int(sg.get("fade_out", 0) * SR)
+        if fi: y[:fi] *= np.linspace(0, 1, fi)[:, None]
+        if fo: y[len(y) - fo:] *= np.linspace(1, 0, fo)[:, None]
+        s = int(sg.get("at", 0) * SR); e = min(n, s + len(y))
+        m[s:e] += y[:e - s] * sg.get("gain", 1.0)
+    return m
+
+
+def automate(m, moves):
+    for a in moves:
+        i0, i1 = int(a["t0"] * SR), min(len(m), int(a["t1"] * SR))
+        if a["type"] == "gain":
+            m[i0:i1] *= (10 ** (np.linspace(a["db0"], a["db1"], i1 - i0) / 20))[:, None]
+            if a.get("hold"): m[i1:] *= 10 ** (a["db1"] / 20)
+        elif a["type"] == "lowpass":   # two one-pole stages with a per-sample cutoff
+            f = a["f0"] * (a["f1"] / a["f0"]) ** np.linspace(0, 1, i1 - i0)
+            k = 1 - np.exp(-2 * np.pi * f / SR)
+            for ch in range(2):
+                x, y1, y2, out = m[i0:i1, ch].astype(np.float64), 0.0, 0.0, np.empty(i1 - i0)
+                for j in range(i1 - i0):
+                    y1 += k[j] * (x[j] - y1); y2 += k[j] * (y1 - y2); out[j] = y2
+                m[i0:i1, ch] = out
+        else:
+            sys.exit(f"unknown automation: {a['type']}")
+
+
+def duck(m, cues):
+    g = np.zeros(len(m))
+    for c in cues:
+        if not c.get("duck"): continue
+        att, hold, rel = int(.01 * SR), int(c.get("duck_hold", .08) * SR), int(c.get("duck_release", .6) * SR)
+        shape = np.concatenate([np.linspace(0, 1, att), np.ones(hold), np.linspace(1, 0, rel) ** 2])
+        s = max(0, int((c["t"] + c.get("duck_at", 0)) * SR) - att); e = min(len(g), s + len(shape))
+        g[s:e] = np.minimum(g[s:e], -c["duck"] * shape[:e - s])
+    m *= (10 ** (g / 20))[:, None].astype(np.float32)
+
+
+def loudness(x):
+    r = subprocess.run(["ffmpeg", "-nostats", "-f", "f32le", "-ar", str(SR), "-ac", "2", "-i", "-", "-af", "ebur128", "-f", "null", "-"],
+                       input=x.astype(np.float32).tobytes(), capture_output=True)
+    lines = [ln for ln in r.stderr.decode().splitlines() if ln.strip().startswith("I:")]
+    return float(lines[-1].split()[1])
+
+
+def master(x, spec):
+    """Gain to the target integrated loudness, then a brick-wall limiter at the ceiling."""
+    gain = spec.get("lufs", -11) - loudness(x)
+    lim = 10 ** (spec.get("ceiling", -1.0) / 20)
+    r = subprocess.run(["ffmpeg", "-v", "error", "-f", "f32le", "-ar", str(SR), "-ac", "2", "-i", "-",
+                        "-af", f"volume={gain:.2f}dB,alimiter=limit={lim:.4f}:attack=3:release=80:level=false",
+                        "-f", "f32le", "-ar", str(SR), "-ac", "2", "-"], input=x.astype(np.float32).tobytes(), capture_output=True, check=True)
+    y = np.frombuffer(r.stdout, dtype=np.float32).reshape(-1, 2).copy()
+    print(f"master: {gain:+.1f} dB of gain, limiter at {spec.get('ceiling', -1.0)} dBFS, result {loudness(y):.1f} LUFS, peak {20 * np.log10(np.abs(y).max() + 1e-9):.1f} dBFS")
+    return y
 
 
 def main():
