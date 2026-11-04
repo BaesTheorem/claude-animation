@@ -1,4 +1,4 @@
-// shots.js: the matchup promo, cut to "Achilles" (Kevin MacLeod, 112 bpm, bars on the downbeats in D).
+// shots.js: the matchup promo, cut to the downbeats of the track in music.json.
 // build(data, assets) makes every card once and returns the shot list. Each shot is fn(t, lt, dur): t = video time,
 // lt = time since the shot started. It sets everything it shows from t (engine.reset() clears the frame first).
 import {
@@ -6,10 +6,11 @@ import {
   textTex, slabTex, glowTex, texOf, backdrop, rays, field, particles, cam, grade, bloom, camera,
 } from './engine.js';
 
-// The cut follows src/promo/music.json: D holds the 24 downbeats the shots start on (D[12] is the drop, D[23] the
-// end card), BEAT one beat, DUR the length. build() sets them, so a new track only needs a new music.json.
-export let D = [], BEAT = .5, DUR = 59;
-let BIG = [], CUTS = [];
+// The cut follows src/promo/music.json: D lists the track's downbeats on the video clock, "shots" gives each shot's
+// length in bars (S8 starts on the drop, S14 is the end card), BAR is one bar and DUR the length. build() sets them,
+// so a new track or a new pace needs only a new music.json. Shots hold their text for at least a bar after it lands.
+export let D = [], BEAT = .5, BAR = 2, DUR = 59;
+let BIG = [], CUTS = [], ST = {};
 
 const ME = { c: '#c9b07a', dk: '#241b10', hi: '#f1e3b8', bg: '#4a3a20', glow: '#e8c67a' };   // legion bronze
 const OP = { c: '#17a454', dk: '#05230f', hi: '#f2cf3a', bg: '#0c4a27', glow: '#3ee07f' };   // rocket green, gold
@@ -20,8 +21,10 @@ const pct = x => Math.round(x * 100);
 const fmt1 = x => (Math.round(x * 10) / 10).toFixed(1);
 
 export function build(M, A, MU) {
-  D = MU.D; BEAT = MU.beat; DUR = MU.dur;
-  BIG = [0, 3, 5, 12, 18, 23].map(i => D[i]); CUTS = [2, 7, 9, 11, 14, 16, 20, 22].map(i => D[i]);
+  D = MU.D; BEAT = MU.beat; BAR = MU.bar; DUR = MU.dur;
+  ST = {}; let bi = MU.first || 0; for (const sh of MU.shots) { ST[sh.id] = D[bi]; bi += sh.bars || 0; }
+  BIG = ['S1', 'S3', 'S4', 'S8', 'S11', 'S14'].map(k => ST[k]);
+  CUTS = ['S2', 'S5', 'S6', 'S7', 'S9', 'S10', 'S12', 'S13'].map(k => ST[k]).concat([ST.S1 + 2 * BAR]);
   // ---------- card factories ----------
   const txt = (s, o = {}) => { const t = textTex(s, o); return new Card(t.tex, t.w, t.h); };
   const slab = (w, h, color, o = {}) => { const t = slabTex(w, h, color, o); return new Card(t.tex, w, h); };
@@ -48,8 +51,8 @@ export function build(M, A, MU) {
   const sideGlowL = glow(1400), sideGlowR = glow(1400);
 
   function bug(t) {
-    if (t < D[0] || t >= D[20] || t >= D[12]) return;   // the matchup shots carry their own team labels, and their captions reach the corner
-    const o = seg(t, D[0] + .4, D[0] + .8);
+    if (t < ST.S1 || t >= ST.S8) return;   // the matchup shots carry their own team labels, and their captions reach the corner
+    const o = seg(t, ST.S1 + .4, ST.S1 + .8);
     bugSlab.show({ x: 790, y: -490, z: -CAMZ, o: o * .95, order: 90 });
     bugWeek.show({ x: 790, y: -490, z: -CAMZ, o, order: 91 });
     bugLeague.show({ x: 790 - 75 - bugLeague.w / 2 - 6, y: -490, z: -CAMZ, o: o * .8, order: 91 });
@@ -60,6 +63,8 @@ export function build(M, A, MU) {
   const wipeIn = (lt, t0, d = .3) => lerp(-.1, 1.2, easeOut(seg(lt, t0, t0 + d)));
   // the last `d` seconds of a shot: everything pushes toward the lens and brightens into the cut
   const exitK = (lt, dur, d = .14) => easeIn(seg(lt, dur - d, dur));
+  // a slow push over the whole shot, so a long hold still moves; capped so nothing leaves the frame
+  const drift = (lt, dur, amt = 100) => amt * ease(clamp(lt / dur));
 
   // ================= S0: cold open =================
   const s0League = txt(up(M.league), { font: FONT.semi, size: 40, track: 16, fill: '#dfe5ee' });
@@ -90,9 +95,9 @@ export function build(M, A, MU) {
   const topTwo = txt('THE TOP TWO SEEDS IN THE LEAGUE', { font: FONT.semi, size: 40, track: 10, fill: '#dfe5ee' });
   const n1glow = glow(900), n2glow = glow(900);
   function S1(t, lt, dur) {
-    const b2 = D[1] - D[0];
+    const b2 = 2 * BAR;
     backdrop({ a: '#13285a', b: '#010207', center: [0, .15], haze: .32, time: t });
-    rays({ color: '#8fb6ff', origin: [0, .78], rot: t * .04, amt: .55 - .25 * seg(lt, 0, 2) + .4 * pulse(t, [D[1]], .8), count: 11 });
+    rays({ color: '#8fb6ff', origin: [0, .78], rot: t * .04, amt: .55 - .25 * seg(lt, 0, 2) + .4 * pulse(t, [ST.S1 + b2], .8), count: 11 });
     field({ y: -640, z: -5200, shift: t * .015, o: .5 });
     particles(t, { color: '#cfe0ff', amt: .4 });
     const ex = exitK(lt, dur);
@@ -101,7 +106,7 @@ export function build(M, A, MU) {
       gotw.show({ y: 70, z: 0, s: lerp(1.55, 1, p) * (1 + lt * .02), o: clamp(lt * 12), ...sheen(lt, .25, .8), order: 30 });
       gotwSlab.show({ y: -78, wipe: wipeIn(lt, .1, .3), order: 28 });
       gotwSub.show({ y: -78, wipe: wipeIn(lt, .18, .3), order: 29 });
-      cam({ z: CAMZ - lt * 60, t, shake: shake(t) });
+      cam({ z: CAMZ - drift(lt, b2, 90), t, shake: shake(t) });
     } else {
       const l = lt - b2, p = expoOut(seg(l, 0, .2)), q = expoOut(seg(l, .18, .38));
       n1.show({ x: -360, y: 70, s: lerp(1.7, 1, p) * (1 + ex * .4), o: clamp(l * 12) * (1 - ex), ...sheen(l, .3, .7), order: 30 });
@@ -112,7 +117,7 @@ export function build(M, A, MU) {
       n1lab.show({ x: -360, y: -120, wipe: wipeIn(l, .25, .3), order: 30 });
       n2lab.show({ x: 360, y: -120, wipe: wipeIn(l, .45, .3), order: 30 });
       topTwo.show({ y: -260, o: seg(l, .9, 1.3) * (1 - ex), order: 30 });
-      cam({ z: CAMZ - 80 - l * 80 - ex * 600, t, shake: shake(t) });
+      cam({ z: CAMZ - 60 - drift(l, dur - b2, 110) - ex * 600, t, shake: shake(t) });
     }
   }
 
@@ -159,9 +164,9 @@ export function build(M, A, MU) {
       tag: txt(extra.tag, { font: FONT.semi, size: 30, track: 10, fill: C.hi }),
     };
     return (t, lt, dur) => {
-      const ex = exitK(lt, dur), b2 = D[1] - D[0];
+      const ex = exitK(lt, dur);
       backdrop({ a: C.bg, b: '#010101', center: [side * .45, .05], haze: .42, time: t });
-      rays({ color: C.glow, origin: [side * .5, .05], rot: t * .05 * side, amt: .5 + .3 * pulse(t, [D[3], D[5]], .8), count: 10, power: 10 });
+      rays({ color: C.glow, origin: [side * .5, .05], rot: t * .05 * side, amt: .5 + .3 * pulse(t, [ST.S3, ST.S4], .8), count: 10, power: 10 });
       particles(t, { color: C.hi, amt: .55, speed: 1.2 });
       const lp = expoOut(seg(lt, 0, .5)), lx = side * 470;
       card.halo.show({ x: lx, y: 20, z: -300, o: .55 * lp, tint: C.glow, order: 2 });
@@ -173,16 +178,16 @@ export function build(M, A, MU) {
       if (card.l2) card.l2.show({ x: lerp(nx - side * 300, nx, expoOut(seg(lt, .16, .48))), y: ny - 165, o: seg(lt, .16, .28) * (1 - ex), ...sheen(lt, .55, .8), order: 30 });
       card.bar.show({ x: nx, y: (l2 ? ny - 165 : ny) - 118, wipe: wipeIn(lt, .3, .4), dir: -side, o: 1 - ex, order: 29 });
       card.stats.forEach((st, k) => {
-        const t0 = .45 + k * BEAT * .5, p = backOut(seg(lt, t0, t0 + .25)), x = nx + (k - (card.stats.length - 1) / 2) * 310, y = -260;
+        const t0 = .5 + k * .45, p = backOut(seg(lt, t0, t0 + .25)), x = nx + (k - (card.stats.length - 1) / 2) * 310, y = -260;
         const o = seg(lt, t0, t0 + .08) * (1 - ex);
         st.slab.show({ x, y, s: lerp(.6, 1, p), o, order: 31 });
         st.big.show({ x, y: y + 18, s: lerp(.6, 1, p), o, order: 32 });
         st.small.show({ x, y: y - 50, o: o * seg(lt, t0 + .1, t0 + .3), order: 32 });
       });
-      const r0 = b2 + .05, rp = seg(lt, r0, r0 + .3);
+      const r0 = BAR + .05, rp = seg(lt, r0, r0 + .3);
       card.ribbon.show({ x: lx, y: -330, wipe: wipeIn(lt, r0, .3), dir: side, o: 1 - ex, order: 33 });
       card.ribbonT.show({ x: lx, y: -330, wipe: wipeIn(lt, r0 + .08, .3), dir: side, o: (1 - ex) * rp, order: 34 });
-      cam({ z: CAMZ - lt * 35 - ex * 700, t, shake: shake(t) });
+      cam({ z: CAMZ - drift(lt, dur, 100) - ex * 700, t, shake: shake(t) });
     };
   }
   const opStreak = op.streak.type === 'WIN' ? `${op.streak.len}-GAME WIN STREAK` : `${op.wins}-${op.losses}`;
@@ -219,19 +224,19 @@ export function build(M, A, MU) {
     byeHead.show({ y: 392, s: lerp(1.3, 1, expoOut(seg(lt, 0, .25))), o: seg(lt, 0, .1) * (1 - ex), ...sheen(lt, .35, .8), order: 30 });
     const y0 = 215, rh = 108;
     ladder.forEach((r, i) => {
-      const t0 = .15 + i * .09, p = expoOut(seg(lt, t0, t0 + .35)), y = y0 - i * rh - (i >= 2 ? 40 : 0), x = lerp(1600, 0, p);
+      const t0 = .15 + i * .16, p = expoOut(seg(lt, t0, t0 + .35)), y = y0 - i * rh - (i >= 2 ? 40 : 0), x = lerp(1600, 0, p);
       const o = seg(lt, t0, t0 + .1) * (1 - ex);
       r.slab.show({ x, y, o, order: 20 });
       r.seed.show({ x: x - 520, y, o, order: 21 });
       r.name.show({ x: x - 450 + r.name.w / 2, y, o, order: 21 });
       r.rec.show({ x: x + 480, y, o, order: 21 });
     });
-    const ly = y0 - 1.5 * rh - 20, lp = seg(lt, .95, 1.3);
-    byeLine.show({ y: ly, wipe: wipeIn(lt, .95, .3), o: 1 - ex, bright: 1 + pulse(t, [D[8]], .6) * 2, order: 25 });
+    const ly = y0 - 1.5 * rh - 20, lp = seg(lt, 1.3, 1.65);
+    byeLine.show({ y: ly, wipe: wipeIn(lt, 1.3, .3), o: 1 - ex, bright: 1 + pulse(t, [ST.S5 + BAR], .6) * 2, order: 25 });
     byeLab.show({ x: -650 - byeLab.w / 2 - 10, y: ly, o: lp * (1 - ex), order: 26 });
     byeGlow.show({ y: ly, z: -40, sy: .18, o: .5 * lp, tint: RED, order: 3 });
-    pack.show({ y: y0 - 5 * rh - 40 - 92, wipe: wipeIn(lt, D[8] - D[7] + .1, .3), o: 1 - ex, order: 30 });
-    cam({ y: lerp(30, -15, ease(seg(lt, 0, dur))), z: CAMZ - 20 - lt * 30 - ex * 600, tx: 0, ty: lerp(25, -25, ease(seg(lt, 0, dur))), t, shake: shake(t) });
+    pack.show({ y: y0 - 5 * rh - 40 - 92, wipe: wipeIn(lt, BAR * 1.5, .35), o: 1 - ex, order: 30 });
+    cam({ y: lerp(30, -15, ease(seg(lt, 0, dur))), z: CAMZ - 20 - drift(lt, dur, 90) - ex * 600, tx: 0, ty: lerp(25, -25, ease(seg(lt, 0, dur))), t, shake: shake(t) });
   }
 
   // ================= S6: what the game is worth =================
@@ -259,19 +264,19 @@ export function build(M, A, MU) {
       pn.name.show({ x: x0, y: 200, o: 1 - ex, order: 30 });
       pn.under.show({ x: x0, y: 150, wipe: wipeIn(lt, .3, .3), o: 1 - ex, order: 30 });
       pn.rows.forEach((r, j) => {
-        const y = 60 - j * 120, t0 = .55 + j * BEAT * 2, f = easeOut(seg(lt, t0, t0 + .7)), val = r.v * f;
+        const y = 60 - j * 120, t0 = .6 + j * BAR * .8, f = easeOut(seg(lt, t0, t0 + .8)), val = r.v * f;
         r.k.show({ x: x0 - 290, y, o: seg(lt, t0 - .2, t0) * (1 - ex), order: 31 });
         r.track.show({ x: x0 + 10, y, o: seg(lt, t0 - .2, t0) * (1 - ex), order: 30 });
         r.fill.show({ x: x0 + 10, y, wipe: lerp(-.05, 1.05, clamp(val)), o: (1 - ex) * seg(lt, t0, t0 + .05), bright: 1 + .6 * pulse(lt, [t0 + .7], .5), order: 31 });
         const n = num(`pct-${k}-${j}`, `${Math.round(val * 100)}%`, { font: FONT.black, size: 60, fill: '#fff' });
         n.show({ x: x0 + 330, y, o: seg(lt, t0, t0 + .05) * (1 - ex), order: 32 });
       });
-      const s0 = D[10] - D[9] + .1, sp = backOut(seg(lt, s0, s0 + .3));
+      const s0 = BAR * 2 + .1, sp = backOut(seg(lt, s0, s0 + .3));
       pn.swingSlab.show({ x: x0, y: -230, s: lerp(.5, 1, sp), o: seg(lt, s0, s0 + .06) * (1 - ex), order: 31 });
       pn.swing.show({ x: x0, y: -230, s: lerp(.5, 1, sp), o: seg(lt, s0, s0 + .06) * (1 - ex), order: 32 });
     });
     foot.show({ y: -400, o: seg(lt, 1, 1.4) * .9 * (1 - ex), order: 30 });
-    cam({ z: CAMZ - lt * 45 - ex * 600, t, shake: shake(t) });
+    cam({ z: CAMZ - drift(lt, dur, 90) - ex * 600, t, shake: shake(t) });
   }
 
   // ================= S7: same games, opposite sides =================
@@ -279,19 +284,19 @@ export function build(M, A, MU) {
   const both = txt('BOTH ROSTERS.', { font: FONT.black, size: 170, fill: '#fff' }), bothSlab = slab(1250, 190, RED);
   const pairs = M.shared_games.map(g => ({ a: pic(A.nfl[g.away], 150), b: pic(A.nfl[g.home], 150), at: txt('@', { font: FONT.black, size: 50, fill: GRAY }) }));
   function S7(t, lt, dur) {
-    const half = dur / 2, rush = easeIn(seg(lt, dur * .55, dur));
+    const rush = easeIn(seg(lt, dur - 1.1, dur)), build = seg(lt, BAR, dur);
     backdrop({ a: '#1a0b10', b: '#000000', haze: .35, time: t, bright: 1 + rush });
-    rays({ color: '#ff5a5a', origin: [0, 0], rot: t * .2, amt: .3 + rush * 1.2, count: 14, power: 14 });
-    particles(t, { color: '#ffffff', amt: .4 + rush, speed: 1 + rush * 8 });
-    if (lt < half) five.show({ y: 170, s: lerp(1.5, 1, expoOut(seg(lt, 0, .2))) * (1 + lt * .05), o: seg(lt, 0, .06), ...sheen(lt, .2, .6), order: 30 });
-    else {
-      const l = lt - half;
-      bothSlab.show({ y: 170, s: lerp(1.3, 1, expoOut(seg(l, 0, .15))) * (1 + rush * .3), order: 29 });
-      both.show({ y: 170, s: lerp(1.6, 1, expoOut(seg(l, 0, .15))) * (1 + rush * .3), order: 30 });
+    rays({ color: '#ff5a5a', origin: [0, 0], rot: t * (.08 + .3 * build), amt: .25 + .3 * build + rush * 1.2, count: 14, power: 14 });
+    particles(t, { color: '#ffffff', amt: .4 + rush, speed: 1 + build * 2 + rush * 8 });
+    five.show({ y: 250, s: lerp(1.5, 1, expoOut(seg(lt, 0, .2))) * (1 + rush * .3), o: seg(lt, 0, .06), ...sheen(lt, .2, .6), order: 30 });
+    if (lt >= BAR) {
+      const l = lt - BAR;
+      bothSlab.show({ y: 40, s: lerp(1.3, 1, expoOut(seg(l, 0, .15))) * (1 + rush * .3), order: 29 });
+      both.show({ y: 40, s: lerp(1.6, 1, expoOut(seg(l, 0, .15))) * (1 + rush * .3), order: 30 });
     }
-    const n = pairs.length, step = (dur * .62) / n;
+    const n = pairs.length, first = BAR * 2, step = (dur - 1.1 - first) / n;
     pairs.forEach((pr, k) => {
-      const t0 = .1 + k * step, on = seg(lt, t0, t0 + .06), x = (k - (n - 1) / 2) * 360, y = -230;
+      const t0 = first + k * step, on = seg(lt, t0, t0 + .06), x = (k - (n - 1) / 2) * 360, y = -300;
       const pop = 1 + .25 * pulse(lt, [t0], .3);
       pr.a.show({ x: x - 90, y, s: pop, o: on, order: 20 });
       pr.b.show({ x: x + 90, y, s: pop, o: on, order: 20 });
@@ -340,8 +345,8 @@ export function build(M, A, MU) {
     const center = spec.center ? clip(spec.center.key, spec.center.h) : null, cframe = center ? slab(center.w + 18, center.h + 18, '#ffffff', { skew: 0, hi: 0 }) : null;
     const nfl = spec.logos ? spec.logos.map(im => pic(im, 220)) : [];
     return (t, lt, dur) => {
-      const ex = exitK(lt, dur), b2 = D[1] - D[0], second = lt >= b2;
-      backdrop({ split: 1, L: ME.bg, R: OP.bg, a: '#0b1530', b: '#010207', seam: .55 + pulse(t, [D[12], D[18]], .6) * 2, haze: .35, time: t });
+      const ex = exitK(lt, dur), b2 = BAR, second = lt >= b2;
+      backdrop({ split: 1, L: ME.bg, R: OP.bg, a: '#0b1530', b: '#010207', seam: .55 + pulse(t, [ST.S8, ST.S11], .6) * 2, haze: .35, time: t });
       rays({ color: '#ffffff', origin: [0, .62], rot: t * .05, amt: .16 + .3 * pulse(t, BIG, .9), count: 12 });
       particles(t, { color: '#ffffff', amt: .3, speed: 1.4 });
       nfl.forEach((n, k) => n.show({ x: (k ? 1 : -1) * 600, y: 40, z: -900, o: .16 * (1 - ex), s: 2.4, order: 1, sat: 0 }));
@@ -369,7 +374,7 @@ export function build(M, A, MU) {
         tagSlab.show({ y: ty, s: lerp(1.3, 1, expoOut(seg(l, .25, .45))), o: seg(l, .25, .3) * (1 - ex), order: 46 });
         tag.show({ y: ty, s: lerp(1.3, 1, expoOut(seg(l, .25, .45))), o: seg(l, .25, .3) * (1 - ex), ...sheen(l, .5, .7), order: 47 });
       }
-      cam({ z: CAMZ - lt * 28 - ex * 650, t, shake: shake(t) });
+      cam({ z: CAMZ - drift(lt, dur, 90) - ex * 650, t, shake: shake(t) });
     };
   }
   const R_ = (side, name) => (side === 'me' ? meRow : opRow)[name];
@@ -425,7 +430,7 @@ export function build(M, A, MU) {
     labR.show({ x: 470, y: 395, o: seg(lt, .1, .3) * (1 - ex), order: 40 });
     const rh = 80, y0 = 325;
     [[rowsMe, -1], [rowsOp, 1]].forEach(([rows, side]) => rows.forEach((c, i) => {
-      const t0 = .12 + i * .1 + (side > 0 ? .05 : 0), p = expoOut(seg(lt, t0, t0 + .32)), cx = side * 470, x = lerp(side * 1500, cx, p), y = y0 - i * rh;
+      const t0 = .15 + i * .14 + (side > 0 ? .07 : 0), p = expoOut(seg(lt, t0, t0 + .32)), cx = side * 470, x = lerp(side * 1500, cx, p), y = y0 - i * rh;
       const o = seg(lt, t0, t0 + .06) * (1 - ex);
       c.slab.show({ x, y, o, order: 20 });
       c.slot.show({ x: x - 360, y, o, order: 21 });
@@ -434,11 +439,11 @@ export function build(M, A, MU) {
       c.team.show({ x: x - 205 + c.team.w / 2, y: y - 23, o: o * .9, order: 21 });
       c.proj.show({ x: x + 345, y, o, order: 21 });
     }));
-    const t1 = D[21] - D[20] + .05, tp = expoOut(seg(lt, t1, t1 + .3));
+    const t1 = BAR * 1.5, tp = expoOut(seg(lt, t1, t1 + .3));
     totMe.show({ x: -470, y: -440, s: lerp(1.6, 1, tp), o: seg(lt, t1, t1 + .06) * (1 - ex), ...sheen(lt, t1 + .3, .6), order: 40 });
     totOp.show({ x: 470, y: -440, s: lerp(1.6, 1, tp), o: seg(lt, t1, t1 + .06) * (1 - ex), ...sheen(lt, t1 + .4, .6), order: 40 });
     projLab.show({ y: -440, o: seg(lt, t1 + .1, t1 + .3) * (1 - ex), order: 40 });
-    cam({ z: CAMZ + 60 - lt * 40 - ex * 600, t, shake: shake(t) * .5 });
+    cam({ z: CAMZ + 60 - drift(lt, dur, 80) - ex * 600, t, shake: shake(t) * .5 });
   }
 
   // ================= S13: win probability =================
@@ -448,7 +453,7 @@ export function build(M, A, MU) {
   const wpNameMe = txt(up(me.name), { font: FONT.black, size: 56, fill: ME.c }), wpNameOp = txt(up(op.name), { font: FONT.black, size: 56, fill: OP.c });
   const wpFoot = txt('LINEUP MODEL · ESPN PROJECTIONS BLENDED WITH THE BETTING MARKET', { font: FONT.med, size: 26, track: 5, fill: GRAY });
   function S13(t, lt, dur) {
-    const ex = exitK(lt, dur, .1), f = easeOut(seg(lt, .15, .95)), split = lerp(.5, wpMe / 100, f);
+    const ex = exitK(lt, dur, .1), f = easeOut(seg(lt, .2, 1.5)), split = lerp(.5, wpMe / 100, f);
     backdrop({ split: 1, L: ME.bg, R: OP.bg, a: '#0b1530', b: '#010207', seam: .4, haze: .3, time: t });
     rays({ color: '#ffffff', origin: [0, .65], rot: t * .04, amt: .3, count: 12 });
     particles(t, { color: '#ffffff', amt: .3 });
@@ -462,7 +467,7 @@ export function build(M, A, MU) {
     wpNameMe.show({ x: -750 + wpNameMe.w / 2 - 20, y: -150, wipe: wipeIn(lt, .2, .3), o: 1 - ex, order: 30 });
     wpNameOp.show({ x: 750 - wpNameOp.w / 2 + 20, y: -150, wipe: wipeIn(lt, .25, .3), dir: -1, o: 1 - ex, order: 30 });
     wpFoot.show({ y: -330, o: seg(lt, .6, 1) * .9 * (1 - ex), order: 30 });
-    cam({ z: CAMZ - lt * 50 - ex * 500, t, shake: shake(t) });
+    cam({ z: CAMZ - drift(lt, dur, 80) - ex * 500, t, shake: shake(t) });
   }
 
   // ================= S14: the lockup =================
@@ -484,16 +489,16 @@ export function build(M, A, MU) {
     rays({ color: '#ffffff', origin: [0, .78], rot: t * .03, amt: .45 - .2 * seg(lt, 0, 4), count: 11 });
     field({ y: -640, z: -5200, shift: t * .01, o: .45 });
     particles(t, { color: '#ffe9c0', amt: .5, speed: .8 });
-    const drift = 0;
+    const dx = 0;
     endHaloMe.show({ x: -520, y: 120, z: -300, o: .5 * p, tint: ME.glow, order: 2 });
     endHaloOp.show({ x: 520, y: 120, z: -300, o: .5 * p, tint: OP.glow, order: 2 });
-    endLogoMe.show({ x: lerp(-1500, -520 - drift, p), y: 120, z: lerp(-1500, 0, p), ry: lerp(1, .12, p), order: 10 });
-    endLogoOp.show({ x: lerp(1500, 520 + drift, p), y: 120, z: lerp(-1500, 0, p), ry: lerp(-1, -.12, p), order: 10 });
+    endLogoMe.show({ x: lerp(-1500, -520 - dx, p), y: 120, z: lerp(-1500, 0, p), ry: lerp(1, .12, p), order: 10 });
+    endLogoOp.show({ x: lerp(1500, 520 + dx, p), y: 120, z: lerp(-1500, 0, p), ry: lerp(-1, -.12, p), order: 10 });
     endVs.show({ y: 120, s: lerp(2.2, 1, expoOut(seg(lt, .25, .5))), o: seg(lt, .25, .32), ...sheen(lt, .7, .8), order: 30 });
-    endNameMe.show({ x: -520 - drift, y: -172, wipe: wipeIn(lt, .4, .35), order: 30 });
-    endNameOp.show({ x: 520 + drift, y: -172, wipe: wipeIn(lt, .45, .35), dir: -1, order: 30 });
-    endRecMe.show({ x: -520 - drift, y: -229, o: seg(lt, .6, .9), order: 30 });
-    endRecOp.show({ x: 520 + drift, y: -229, o: seg(lt, .65, .95), order: 30 });
+    endNameMe.show({ x: -520 - dx, y: -172, wipe: wipeIn(lt, .4, .35), order: 30 });
+    endNameOp.show({ x: 520 + dx, y: -172, wipe: wipeIn(lt, .45, .35), dir: -1, order: 30 });
+    endRecMe.show({ x: -520 - dx, y: -229, o: seg(lt, .6, .9), order: 30 });
+    endRecOp.show({ x: 520 + dx, y: -229, o: seg(lt, .65, .95), order: 30 });
     endLeague.show({ y: 470, o: seg(lt, .3, .7), order: 30 });
     endWeek.show({ y: 385, s: lerp(1.4, 1, expoOut(seg(lt, .15, .4))), o: seg(lt, .15, .22), ...sheen(lt, 1.2, .9), order: 30 });
     const k0 = 1.3, kp = expoOut(seg(lt, k0, k0 + .35));
@@ -502,13 +507,13 @@ export function build(M, A, MU) {
     kickSub.show({ y: -400, o: seg(lt, k0 + .4, k0 + .8), order: 32 });
     credit1.show({ y: -497, z: -CAMZ, o: seg(lt, 3.6, 4.2) * .9, order: 92 });
     credit2.show({ y: -522, z: -CAMZ, o: seg(lt, 3.6, 4.2) * .8, order: 92 });
-    cam({ z: CAMZ - 40 - lt * 12, y: 10, t, shake: shake(t) * .6 });
+    cam({ z: CAMZ - 40 - drift(lt, dur, 130), y: 10, t, shake: shake(t) * .6 });
     grade.uniforms.fade.value = fade;
   }
 
   // ---------- the cut ----------
-  const SHOTS = [[0, S0], [D[0], S1], [D[2], S2], [D[3], S3], [D[5], S4], [D[7], S5], [D[9], S6], [D[11], S7],
-    [D[12], S8], [D[14], S9], [D[16], S10], [D[18], S11], [D[20], S12], [D[22], S13], [D[23], S14]];
+  const FN = { S1, S2, S3, S4, S5, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
+  const SHOTS = [[0, S0], ...MU.shots.map(sh => [ST[sh.id], FN[sh.id]])];
   return (t) => {
     let i = 0; while (i + 1 < SHOTS.length && t >= SHOTS[i + 1][0]) i++;
     const t0 = SHOTS[i][0], end = i + 1 < SHOTS.length ? SHOTS[i + 1][0] : DUR;

@@ -49,9 +49,9 @@ bin/sfx-mix src/promo/promo.sfx.json --wav=out/check/promo_mix.wav
 
 The matchup data comes from `fantasy/promo_data.py` in the exobrain-harness repo and stays in `src/promo/data/` (gitignored).
 
-The soundtrack is an edit of one track: `src/promo/music.json` holds the downbeats the shots cut on, and `src/promo/promo.sfx.json` cuts the intro into the climax under a silence and a riser, then lays recorded trailer hits on the cuts. `bin/sfx-mix` does the edit, the ducking and the mastering.
+`src/promo/music.json` holds the track's downbeats and the shot plan in bars, so the pace of the cut is set in one place. `src/promo/sfx_sheet.py` writes `promo.sfx.json`, which lays recorded trailer hits on the shot starts, and `bin/sfx-mix` mixes, ducks and masters it. `sfx-mix` can also cut a track into an edit list when a song's own structure does not fit the promo.
 
-Music: 'Juggernaut' by Scott Buckley - released under CC-BY 4.0. www.scottbuckley.com.au
+Music: "Victory News - Triumphant Orchestral Anthem" by Sonican, from Pixabay (Pixabay Content License).
 
 Sound effects: CC0 recordings from freesound.org, listed with their authors in `src/promo/sounds.json`.
 

@@ -1,8 +1,10 @@
 {
  "music": {
-  "file": "juggernaut.mp3",
-  "url": "https://www.scottbuckley.com.au/library/wp-content/uploads/2022/07/Juggernaut.mp3",
-  "credit": "'Juggernaut' by Scott Buckley - released under CC-BY 4.0. www.scottbuckley.com.au"
+  "file": "victory_news.mp3",
+  "url": "https://cdn.pixabay.com/download/audio/2025/08/30/audio_2d0a46a147.mp3?filename=sonican-victory-news-triumphant-orchestral-anthem-394549.mp3",
+  "page": "https://pixabay.com/music/main-title-victory-news-triumphant-orchestral-anthem-394549/",
+  "license": "Pixabay Content License",
+  "credit": "\"Victory News - Triumphant Orchestral Anthem\" by Sonican (Pixabay)"
  },
  "sfx": {
   "hit_hard": {
