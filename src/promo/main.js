@@ -1,24 +1,26 @@
 // main.js: loads the matchup data and every asset, builds the shots, and exposes the render.mjs contract
 // (window.ready, renderAt, renderSheet, gpuInfo, DUR, PROJECT). Open promo.html?t=12.5 in Chrome to look at one time.
 import { renderer, reset, frame, loadFonts, loadImage, rasterize, loadClipMeta, makeField, W, H } from './engine.js';
-import { build, DUR } from './shots.js';
+import { build } from './shots.js';
 
 const get = async p => { const r = await fetch(p); if (!r.ok) throw new Error(p + ' ' + r.status); return r.json(); };
 const M = await get('src/promo/data/matchup.json'), C = await get('src/promo/data/clips.json');
+const MU = await get('src/promo/music.json'), SND = await get('src/promo/sounds.json');
 await loadFonts();
 makeField();
 await Promise.all(Object.keys(C.clips).map(loadClipMeta));
-const A = { logoMe: await loadImage('assets/promo/logos/logo_me.png'), logoOpp: await rasterize('assets/promo/logos/logo_opp.svg', 1024), nfl: {}, heads: {} };
+const A = { logoMe: await loadImage('assets/promo/logos/logo_me.png'), logoOpp: await rasterize('assets/promo/logos/logo_opp.svg', 1024), nfl: {}, heads: {},
+  credit: SND.music.credit };
 const jobs = [];
 for (const side of ['me', 'opp']) for (const r of M[side].lineup) {
   for (const t of [r.team, r.opp.replace('@', '')]) if (!A.nfl[t]) { A.nfl[t] = true; jobs.push(loadImage(`assets/promo/nfl/${t}.png`).then(im => { A.nfl[t] = im; })); }
   if (r.id > 0) jobs.push(loadImage(`assets/promo/headshots/${r.id}.png`).then(im => { A.heads[r.id] = im; }, () => {}));
 }
 await Promise.all(jobs);
-const draw = build(M, A);
+const draw = build(M, A, MU);
 
-window.DUR = DUR;
-window.PROJECT = { audio: 'assets/promo/music/achilles.mp3', duration: DUR };
+window.DUR = MU.dur;
+window.PROJECT = { audio: `assets/promo/music/${SND.music.file}`, duration: MU.dur };
 window.renderAt = async (t, type = 'image/png', q = .92) => { reset(); draw(t); const c = await frame(t); return c.toDataURL(type, q); };
 window.renderSheet = async (times, cols = 3, w = 640, crop = null) => {
   const h = Math.round(w * (crop ? crop[3] / crop[2] : H / W)), rows = Math.ceil(times.length / cols);

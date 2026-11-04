@@ -6,12 +6,10 @@ import {
   textTex, slabTex, glowTex, texOf, backdrop, rays, field, particles, cam, grade, bloom, camera,
 } from './engine.js';
 
-// downbeats of "Achilles" (librosa beat track at 112 bpm, bar phase from onset energy); the drop is D[12]
-export const D = [1.6, 3.74, 5.87, 8.06, 10.19, 12.33, 14.49, 16.6, 18.73, 20.86, 23.01, 25.16, 27.27, 29.37, 31.46,
-  33.58, 35.69, 37.79, 39.89, 42.0, 44.11, 46.21, 48.3, 50.43];
-export const BEAT = 0.5341, DUR = 59.0;
-const BIG = [1.6, 8.06, 12.33, 27.27, 39.89, 50.43];
-const CUTS = [5.87, 16.6, 20.86, 25.16, 31.46, 35.69, 44.11, 48.3];
+// The cut follows src/promo/music.json: D holds the 24 downbeats the shots start on (D[12] is the drop, D[23] the
+// end card), BEAT one beat, DUR the length. build() sets them, so a new track only needs a new music.json.
+export let D = [], BEAT = .5, DUR = 59;
+let BIG = [], CUTS = [];
 
 const ME = { c: '#c9b07a', dk: '#241b10', hi: '#f1e3b8', bg: '#4a3a20', glow: '#e8c67a' };   // legion bronze
 const OP = { c: '#17a454', dk: '#05230f', hi: '#f2cf3a', bg: '#0c4a27', glow: '#3ee07f' };   // rocket green, gold
@@ -21,7 +19,9 @@ const up = s => String(s).toUpperCase();
 const pct = x => Math.round(x * 100);
 const fmt1 = x => (Math.round(x * 10) / 10).toFixed(1);
 
-export function build(M, A) {
+export function build(M, A, MU) {
+  D = MU.D; BEAT = MU.beat; DUR = MU.dur;
+  BIG = [0, 3, 5, 12, 18, 23].map(i => D[i]); CUTS = [2, 7, 9, 11, 14, 16, 20, 22].map(i => D[i]);
   // ---------- card factories ----------
   const txt = (s, o = {}) => { const t = textTex(s, o); return new Card(t.tex, t.w, t.h); };
   const slab = (w, h, color, o = {}) => { const t = slabTex(w, h, color, o); return new Card(t.tex, w, h); };
@@ -474,10 +474,10 @@ export function build(M, A) {
   const fkTime = fkDate.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' }).toUpperCase();
   const kickT = txt(`KICKOFF ${fkDay} ${fkTime} CT`, { font: FONT.black, size: 64, fill: '#fff' }), kickSlab = slab(kickT.w + 90, 100, RED);
   const kickSub = txt(`${up(fk.name)} ${fk.opp.startsWith('@') ? '@ ' + fk.opp.slice(1) : 'vs ' + fk.opp} · ${up(fk.network || '')}`, { font: FONT.semi, size: 32, track: 6, fill: '#dfe5ee' });
-  const credit1 = hudTxt('"Achilles" Kevin MacLeod (incompetech.com)', { font: FONT.med, size: 26, fill: GRAY });
-  const credit2 = hudTxt('Licensed under Creative Commons: By Attribution 4.0 License · creativecommons.org/licenses/by/4.0', { font: FONT.med, size: 22, fill: '#6d7789' });
+  const credit1 = hudTxt(`Music: ${A.credit}`, { font: FONT.med, size: 26, fill: GRAY });
+  const credit2 = hudTxt('Sound effects: freesound.org (CC0)', { font: FONT.med, size: 22, fill: '#6d7789' });
   function S14(t, lt, dur) {
-    const p = expoOut(seg(lt, 0, .55)), fade = seg(lt, dur - .9, dur);
+    const p = expoOut(seg(lt, 0, .55)), fade = seg(lt, dur - 2.4, dur - .3);
     backdrop({ split: .8, L: ME.bg, R: OP.bg, a: '#0b1530', b: '#010207', seam: .35, haze: .4, time: t });
     rays({ color: '#ffffff', origin: [0, .78], rot: t * .03, amt: .45 - .2 * seg(lt, 0, 4), count: 11 });
     field({ y: -640, z: -5200, shift: t * .01, o: .45 });

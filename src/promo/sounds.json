@@ -1,0 +1,153 @@
+{
+ "music": {
+  "file": "juggernaut.mp3",
+  "url": "https://www.scottbuckley.com.au/library/wp-content/uploads/2022/07/Juggernaut.mp3",
+  "credit": "'Juggernaut' by Scott Buckley - released under CC-BY 4.0. www.scottbuckley.com.au"
+ },
+ "sfx": {
+  "hit_hard": {
+   "freesound": 328448,
+   "user": "Vendarro",
+   "title": "Hard Cinematic Hit",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/328/328448_4519159-hq.mp3",
+   "land": 0.026
+  },
+  "braam": {
+   "freesound": 647712,
+   "user": "unfa",
+   "title": "Braam",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/647/647712_1038806-hq.mp3",
+   "land": 0.026
+  },
+  "braam_hit": {
+   "freesound": 431316,
+   "user": "vykroft",
+   "title": "BRAAM-HIT",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/431/431316_6802113-hq.mp3",
+   "land": 0.758
+  },
+  "braam_long": {
+   "freesound": 529924,
+   "user": "TDPK_Music",
+   "title": "distorted braam pitch up SD.wav",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/529/529924_8851435-hq.mp3",
+   "land": 0.035
+  },
+  "hit_dramatic": {
+   "freesound": 222517,
+   "user": "qubodup",
+   "title": "Dramatic Hit",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/222/222517_71257-hq.mp3",
+   "land": 0.026
+  },
+  "boom": {
+   "freesound": 255111,
+   "user": "rhapsodize",
+   "title": "Cinematic_Boom_Rhapsodize.wav",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/255/255111_2472317-hq.mp3",
+   "land": 0.026
+  },
+  "bass_boom": {
+   "freesound": 268084,
+   "user": "LordHannes",
+   "title": "Bass Boom",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/268/268084_3812550-hq.mp3",
+   "land": 0.026
+  },
+  "explosion": {
+   "freesound": 259300,
+   "user": "unfa",
+   "title": "Huge Explosion",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/259/259300_1038806-hq.mp3",
+   "land": 0.0
+  },
+  "subdrop": {
+   "freesound": 212768,
+   "user": "qubodup",
+   "title": "Bass Drop",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/212/212768_71257-hq.mp3",
+   "land": 0.026
+  },
+  "riser_slam": {
+   "freesound": 770200,
+   "user": "deep_",
+   "title": "Riser Slam Boom | Trailer Effect",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/770/770200_6523125-hq.mp3",
+   "land": 2.485
+  },
+  "riser_long": {
+   "freesound": 715353,
+   "user": "AudioPapkin",
+   "title": "Riser Hit sfx 062",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/715/715353_8698658-hq.mp3",
+   "land": 8.384
+  },
+  "reverse_bass": {
+   "freesound": 138124,
+   "user": "snakebarney",
+   "title": "Reverse Dramatic Bass Hit",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/138/138124_1572282-hq.mp3",
+   "land": 4.208
+  },
+  "reverse_cymbal": {
+   "freesound": 774635,
+   "user": "loganzsound",
+   "title": "Reverse Cymbal Shiny",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/774/774635_16682330-hq.mp3",
+   "land": 2.874
+  },
+  "whoosh": {
+   "freesound": 169867,
+   "user": "Halgrimm",
+   "title": "swoosh",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/169/169867_2834921-hq.mp3",
+   "land": 1.103
+  },
+  "whoosh_slide": {
+   "freesound": 171255,
+   "user": "qubodup",
+   "title": "Sliding Trailer Woosh",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/171/171255_71257-hq.mp3",
+   "land": 0.537
+  },
+  "whoosh_air": {
+   "freesound": 776651,
+   "user": "pryanic",
+   "title": "DSGNWhsh_Noisy air whoosh with little reverb and sub note_Anton Bushinskiy_AB FX",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/776/776651_11318300-hq.mp3",
+   "land": 1.09
+  },
+  "chop": {
+   "freesound": 127197,
+   "user": "dave.des",
+   "title": "fast simple chop 5.aif",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/127/127197_162543-hq.mp3",
+   "land": 0.134
+  },
+  "bay_hit": {
+   "freesound": 347561,
+   "user": "Kinoton",
+   "title": "Micheal Bay Hit",
+   "license": "CC0",
+   "url": "https://cdn.freesound.org/previews/347/347561_2247456-hq.mp3",
+   "land": 1.669
+  }
+ }
+}

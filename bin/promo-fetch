@@ -10,7 +10,8 @@
 
 What it gets:
   fonts     Barlow Condensed (SIL OFL) from the google/fonts repository
-  music     the track in clips.json "music" from incompetech.com, with a CREDITS line (CC BY 4.0)
+  music     the track in src/promo/sounds.json, with its CREDITS line (CC BY 4.0)
+  sfx       the trailer sounds in src/promo/sounds.json (Freesound CC0 previews), with a CREDITS file
   headshots every starter's ESPN headshot (1200 px wide), by ESPN player id
   logos     NFL team logos (500 px) for every team in the two lineups, and a transparent cut of a fantasy
             logo that arrives as a JPEG on white (the matchup step downloads those, because they need cookies)
@@ -21,7 +22,6 @@ The data files name leaguemates' teams: keep them out of git (src/promo/data/ is
 import argparse
 import json
 import subprocess
-import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -90,13 +90,15 @@ def main():
             OUT / f"fonts/BarlowCondensed-{f}.ttf", a.force)
     get("https://github.com/google/fonts/raw/main/ofl/barlowcondensed/OFL.txt", OUT / "fonts/OFL.txt", a.force)
 
-    print("music")
-    mus = c["music"]
-    get("https://incompetech.com/music/royalty-free/mp3-royaltyfree/" + urllib.parse.quote(mus["title"]) + ".mp3",
-        OUT / f"music/{mus['file']}", a.force)
-    (OUT / "music/CREDITS").write_text(f'"{mus["title"]}" Kevin MacLeod (incompetech.com)\n'
-                                       "Licensed under Creative Commons: By Attribution 4.0 License\n"
-                                       "http://creativecommons.org/licenses/by/4.0/\n")
+    print("music and sound effects")
+    snd = json.loads((ROOT / "src/promo/sounds.json").read_text())
+    get(snd["music"]["url"], OUT / f"music/{snd['music']['file']}", a.force)
+    (OUT / "music/CREDITS").write_text(snd["music"]["credit"] + "\n")
+    lines = []
+    for key, x in snd["sfx"].items():
+        get(x["url"], OUT / f"sfx/{key}.mp3", a.force)
+        lines.append(f"{key}.mp3: \"{x['title']}\" by {x['user']}, https://freesound.org/s/{x['freesound']}/ ({x['license']}, preview MP3)")
+    (OUT / "sfx/CREDITS").write_text("\n".join(lines) + "\n")
 
     print("headshots and NFL logos")
     teams = set()

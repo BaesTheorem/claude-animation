@@ -1,0 +1,32 @@
+{
+ "track": "juggernaut",
+ "D": [
+  1.974,
+  3.889,
+  5.805,
+  7.721,
+  9.648,
+  11.552,
+  13.491,
+  15.395,
+  17.31,
+  19.249,
+  21.165,
+  23.092,
+  25.008,
+  26.935,
+  28.851,
+  30.766,
+  32.694,
+  34.609,
+  36.536,
+  38.464,
+  40.368,
+  42.295,
+  44.211,
+  46.131
+ ],
+ "beat": 0.4799,
+ "dur": 58.76,
+ "note": "Juggernaut intro downbeats 0-11, then the drop cuts to the climax downbeat at track 188.20 s; D[23] is the track's final release at 209.32 s."
+}

@@ -49,7 +49,11 @@ bin/sfx-mix src/promo/promo.sfx.json --wav=out/check/promo_mix.wav
 
 The matchup data comes from `fantasy/promo_data.py` in the exobrain-harness repo and stays in `src/promo/data/` (gitignored).
 
-Music: "Achilles" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License. http://creativecommons.org/licenses/by/4.0/
+The soundtrack is an edit of one track: `src/promo/music.json` holds the downbeats the shots cut on, and `src/promo/promo.sfx.json` cuts the intro into the climax under a silence and a riser, then lays recorded trailer hits on the cuts. `bin/sfx-mix` does the edit, the ducking and the mastering.
+
+Music: 'Juggernaut' by Scott Buckley - released under CC-BY 4.0. www.scottbuckley.com.au
+
+Sound effects: CC0 recordings from freesound.org, listed with their authors in `src/promo/sounds.json`.
 
 ## What's here
 
