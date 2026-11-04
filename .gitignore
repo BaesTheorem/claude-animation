@@ -3,3 +3,5 @@ out/
 assets/*.mp3
 assets/*.wav
 assets/*.flac
+src/promo/data/
+assets/promo/
