@@ -37,6 +37,20 @@ bin/song-sync assets/song.mp3 --bpm=88 --lyrics=timings.json    # also write src
 
 Pass `--bpm` when you know the tempo. Blind detection often picks a 3:2 or 2:1 relative of the real one: on the P(doom) track it guessed 129 against a true 88, which came third in its candidate list. With the tempo given, the offset it found was 44 ms (about one frame) from the hand-measured value. `--lyrics` takes a list of `{text, start, end}` lines (or `{"lines": [...]}`). The lines are there to time acting and cuts, so the no-text rule still holds.
 
+## Broadcast promo (this fork)
+
+`promo.html` is a second page for the same renderer: sports-broadcast motion graphics in three.js (type, logos, headshots and GIF clips as cards in a 3D world, with bloom and a film grade). The first use is a fantasy football matchup promo, cut to the downbeats of the music in `src/promo/shots.js`.
+
+```bash
+bin/promo-fetch                                    # fonts, music, headshots, logos, clips -> assets/promo/ (gitignored)
+node render.mjs --page=promo.html --fps=30 --frames --workers=2 --framesdir=out/frames_promo
+bin/sfx-mix src/promo/promo.sfx.json --wav=out/check/promo_mix.wav
+```
+
+The matchup data comes from `fantasy/promo_data.py` in the exobrain-harness repo and stays in `src/promo/data/` (gitignored).
+
+Music: "Achilles" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License. http://creativecommons.org/licenses/by/4.0/
+
 ## What's here
 
 | path | what it is |
