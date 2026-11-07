@@ -1,0 +1,78 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.10,<3.13"
+# dependencies = ["numpy", "soundfile"]
+# ///
+"""Check that a rendered video is in sync with its song, from the encoded file alone.
+
+    bin/av-sync-check out/spark.mp4 private/spark/mix.wav private/spark/cuts.json [--fps 60]
+
+1. Audio: the MP4's audio track is decoded and cross-correlated with the source mix.
+   The lag must be 0 (within a few samples); anything else means the mux shifted the song.
+2. Video: cuts.json lists the times (seconds) where the picture is meant to change all at
+   once. The frame-to-frame difference of the decoded video must spike on the frame that
+   holds each time, so the encoded frames are where the renderer put them.
+Prints numbers only.
+"""
+import argparse
+import json
+import subprocess
+import tempfile
+from pathlib import Path
+
+import numpy as np
+
+
+def decode_audio(path: Path, sr: int) -> np.ndarray:
+    with tempfile.TemporaryDirectory() as td:
+        wav = Path(td) / "a.wav"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(path), "-ac", "1", "-ar", str(sr), "-c:a", "pcm_f32le", str(wav)], check=True)
+        import soundfile as sf
+
+        y, _ = sf.read(str(wav), dtype="float32")
+    return y
+
+
+def lag_samples(a: np.ndarray, b: np.ndarray, start: int, n: int, maxlag: int) -> int:
+    x, y = a[start:start + n], b[start - maxlag:start + n + maxlag]
+    size = 1 << int(np.ceil(np.log2(len(x) + len(y))))
+    c = np.fft.irfft(np.fft.rfft(y, size) * np.conj(np.fft.rfft(x, size)), size)[: 2 * maxlag + 1]
+    return int(np.argmax(c)) - maxlag
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("video", type=Path)
+    ap.add_argument("mix", type=Path)
+    ap.add_argument("cuts", type=Path)
+    ap.add_argument("--fps", type=float, default=60)
+    a = ap.parse_args()
+
+    sr = 22050
+    va, ma = decode_audio(a.video, sr), decode_audio(a.mix, sr)
+    lags = [lag_samples(ma, va, int(s * sr), 10 * sr, int(0.25 * sr)) for s in (20, 70, 120, 170)]
+    print(f"audio lag vs source mix at 20/70/120/170 s: {lags} samples at {sr} Hz "
+          f"({[round(x / sr * 1000, 2) for x in lags]} ms); lengths {len(va) / sr:.3f}s vs {len(ma) / sr:.3f}s")
+
+    w, h = 96, 54
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(a.video), "-vf", f"scale={w}:{h},format=gray", "-f", "rawvideo", "-"],
+                         capture_output=True, check=True).stdout
+    frames = np.frombuffer(raw, np.uint8).reshape(-1, h, w).astype(np.float32)
+    diff = np.concatenate([[0.0], np.abs(np.diff(frames, axis=0)).mean(axis=(1, 2))])
+    cuts = json.loads(a.cuts.read_text())
+    offs, found = [], 0
+    for t in cuts:
+        k = int(np.ceil(t * a.fps - 1e-6))           # first frame drawn at or after t
+        lo, hi = max(1, k - 6), min(len(diff), k + 7)
+        j = lo + int(np.argmax(diff[lo:hi]))
+        if diff[j] > 4 * np.median(diff[max(1, k - 60):k + 60]) + 1:
+            found += 1
+            offs.append(j - k)
+    offs = np.asarray(offs)
+    print(f"video: {len(frames)} frames ({len(frames) / a.fps:.3f}s); {found}/{len(cuts)} cuts found as spikes; "
+          f"cut frame minus expected frame: median {np.median(offs):+.0f}, "
+          f"exact {int(np.sum(offs == 0))}, within 1 frame {int(np.sum(np.abs(offs) <= 1))}, worst {int(np.max(np.abs(offs)))}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+"""Mask lyric phrases in command output, so copyrighted lyrics never reach a log or a chat.
+
+    bin/lyricguard -- python3 some_script.py args     run a command, mask stdout and stderr
+    some-command 2>&1 | bin/lyricguard                filter a stream
+    bin/lyricguard --test                             self-check against the stored lyrics
+
+It reads every private/*/lyrics.json (written by bin/lyrics-fetch). A word in the
+output is replaced by blocks when it and a neighbour in the same output line are
+two consecutive words of some song's lyrics. Single words pass, because one word
+is not a lyric and masking every "the" would make logs unreadable. At a line
+break the first word of the new line is also checked against the last word of
+the previous line, so a lyric printed one word per line leaks at most one word.
+
+INVARIANTS
+    - The guard itself never prints a lyric, including in its own errors.
+    - With no lyrics files present it passes output through unchanged.
+"""
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+WORD = re.compile(r"[A-Za-z’']+")
+
+
+def norm(w: str) -> str:
+    return re.sub(r"[^a-z]", "", w.lower())
+
+
+def load_bigrams() -> set[tuple[str, str]]:
+    pairs: set[tuple[str, str]] = set()
+    for f in sorted((ROOT / "private").glob("*/lyrics.json")):
+        try:
+            doc = json.loads(f.read_text())
+        except (OSError, ValueError):
+            print(f"lyricguard: cannot read {f.parent.name}/lyrics.json", file=sys.stderr)
+            continue
+        words = [norm(w) for line in doc.get("lines", []) for w in WORD.findall(line.get("text", ""))]
+        words = [w for w in words if w]
+        pairs.update(zip(words, words[1:]))
+    return pairs
+
+
+class Masker:
+    def __init__(self, pairs: set[tuple[str, str]]):
+        self.pairs, self.prev_last = pairs, ""
+
+    def line(self, text: str) -> str:
+        if not self.pairs:
+            return text
+        toks = list(WORD.finditer(text))
+        n = [norm(m.group()) for m in toks]
+        hit = [False] * len(toks)
+        for i in range(len(toks) - 1):
+            if (n[i], n[i + 1]) in self.pairs:
+                hit[i] = hit[i + 1] = True
+        if toks and self.prev_last and (self.prev_last, n[0]) in self.pairs:
+            hit[0] = True
+        if toks:
+            self.prev_last = n[-1]
+        out, pos = [], 0
+        for m, h in zip(toks, hit):
+            if h:
+                out.append(text[pos:m.start()] + "▇" * len(m.group()))
+                pos = m.end()
+        out.append(text[pos:])
+        return "".join(out)
+
+
+def self_test(pairs: set[tuple[str, str]]) -> int:
+    lines = [line.get("text", "") for f in (ROOT / "private").glob("*/lyrics.json")
+             for line in json.loads(f.read_text()).get("lines", [])]
+    m = Masker(pairs)
+    leaked_words = sum(len(WORD.findall(m.line(t))) for t in lines)
+    total = sum(len(WORD.findall(t)) for t in lines)
+    m2 = Masker(pairs)
+    control = "wrote 120 frames in 3.2 s, median gap 0.08 s"
+    print(f"{len(pairs)} lyric word pairs; {total - leaked_words}/{total} lyric words masked when printed line by line")
+    print(f"control line unchanged: {m2.line(control) == control}")
+    return 0 if total and leaked_words <= len(lines) else 1
+
+
+def main() -> int:
+    argv = sys.argv[1:]
+    pairs = load_bigrams()
+    if argv[:1] == ["--test"]:
+        return self_test(pairs)
+    m = Masker(pairs)
+    if argv[:1] == ["--"]:
+        argv = argv[1:]
+    if not argv:
+        for raw in sys.stdin:
+            sys.stdout.write(m.line(raw))
+            sys.stdout.flush()
+        return 0
+    p = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1)
+    assert p.stdout is not None
+    for raw in p.stdout:
+        sys.stdout.write(m.line(raw))
+        sys.stdout.flush()
+    return p.wait()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

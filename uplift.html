@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Uplift</title>
+<style>
+  html, body { margin: 0; background: #05060d; color: #ddd; font: 13px system-ui, sans-serif; }
+  main { padding: 12px; display: grid; gap: 8px; }
+  #view { width: min(100%, 1280px); aspect-ratio: 16 / 9; height: auto; background: #05060d; }
+  .bar { display: flex; gap: 10px; align-items: center; max-width: 1280px; }
+  #scrub { flex: 1; }
+  #tt { font-variant-numeric: tabular-nums; min-width: 190px; }
+</style>
+<script src="vendor/three-uplift.bundle.js"></script>
+<script src="src/uplift/timing.js"></script>
+<script src="src/uplift/lib.js"></script>
+<script src="src/uplift/people.js"></script>
+</head>
+<body>
+<main>
+  <div id="stage"></div>
+  <div class="bar"><input id="scrub" type="range" min="0" max="181" step="0.0417" value="0"><span id="tt">loading…</span></div>
+</main>
+<script src="src/uplift/ch1_stone.js"></script>
+<script src="src/uplift/ch2_fields.js"></script>
+<script src="src/uplift/ch3_industry.js"></script>
+<script src="src/uplift/ch4_climb.js"></script>
+<script src="src/uplift/ch5_space.js"></script>
+<script src="src/uplift/ch6_again.js"></script>
+<script src="src/uplift/main.js"></script>
+</body>
+</html>
