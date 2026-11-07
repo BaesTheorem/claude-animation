@@ -36,7 +36,7 @@
           float lit = smoothstep(-.35, .25, ndl);
           c += mix(vec3(.18, .38, 1.), vec3(1., .55, .28), smoothstep(.05, -.25, ndl) * lit) * fr * (.25 + 1.8 * lit);
           for (int i = 0; i < ${NR}; i++) { if (uRingR[i] < 0.) continue; float a = acos(clamp(dot(N, uRingC[i]), -1., 1.));
-            c += vec3(.45, .8, 1.) * exp(-pow((a - uRingR[i]) / .009, 2.)) * uRingK * (1. - smoothstep(.4, 1.2, uRingR[i])) * 1.3; }
+            c += vec3(.45, .8, 1.) * exp(-pow((a - uRingR[i]) / .011, 2.)) * uRingK * (1. - smoothstep(.45, 1.3, uRingR[i])) * 2.0; }
           gl_FragColor = vec4(c, 1.);
         }` });
     const body = new THREE.Mesh(new THREE.SphereGeometry(RE, 128, 64), m); g.add(body);
@@ -106,51 +106,51 @@
   });
 
   // ======================================================== S22 L18: keys and a launch
+  // A closed room high above the city at night. The typist sits with their back to us, facing a wide window; the
+  // monitor's light is on the right. A click on the beat, then a rocket lifts off on the horizon through the window.
   SHOT({ id: 'S22', t0: LINE(18)[0], t1: LINE(19)[0], out: { kind: 'cut' },
     build(G) {
       const m = silMat({ fog: 0 }), room = new THREE.Group();
-      // the room: floor, back wall with a wide window (left), side wall, desk, chair, monitor
       const put = (o, x, y, z) => { o.position.set(x, y, z); room.add(o); return o; };
-      put(box(12, .1, 12, m), 0, -.05, 0);
-      put(box(1.6, 3.2, .2, m), -5.2, 1.6, -3);   put(box(5.2, .9, .2, m), -1.8, .45, -3);   put(box(5.2, .6, .2, m), -1.8, 2.9, -3);
-      put(box(6, 3.2, .2, m), 3.8, 1.6, -3);      put(box(.08, 1.7, .08, m), -1.8, 1.75, -3);
-      put(box(1.8, .06, .8, m), 1.6, .76, -1.2);  put(box(.06, .76, .06, m), .8, .38, -1.5); put(box(.06, .76, .06, m), 2.4, .38, -1.5);
-      put(box(.62, .38, .03, litMat('#8FB4F0', 1.05)), 1.6, 1.12, -1.48); put(box(.66, .42, .04, m), 1.6, 1.12, -1.51); put(box(.06, .2, .06, m), 1.6, .88, -1.5);
-      put(box(.45, .02, .16, m), 1.6, .8, -1.05);
-      put(box(.5, .06, .5, m), 1.6, .46, -.35); put(box(.5, .6, .06, m), 1.6, .76, -.1);
-      const screenGlow = glow('#9CC4FF', .9, .12); screenGlow.position.set(1.6, 1.12, -1.4); room.add(screenGlow);
+      put(box(9, .1, 8, m), 0, -.05, 0); put(box(9, .1, 8, m), 0, 3.25, 0);                // floor, ceiling
+      put(box(.1, 3.3, 8, m), -4.5, 1.6, 0); put(box(.1, 3.3, 8, m), 4.5, 1.6, 0);          // side walls
+      put(box(9, .9, .2, m), 0, .45, -3); put(box(9, .65, .2, m), 0, 2.93, -3);             // under and over the window
+      put(box(1.5, 3.3, .2, m), -3.75, 1.6, -3); put(box(1.5, 3.3, .2, m), 3.75, 1.6, -3);   // window sides
+      put(box(.07, 1.7, .07, m), 0, 1.75, -3); put(box(6.0, .05, .07, m), 0, 1.75, -3);      // mullions
+      put(box(2.2, .06, .8, m), .2, .76, -2.2); put(box(.06, .76, .06, m), -.8, .38, -2.4); put(box(.06, .76, .06, m), 1.2, .38, -2.4);
+      const scr = put(box(.6, .37, .03, litMat('#7FA4E0', .32)), .78, 1.1, -2.35); scr.rotation.y = -.45;
+      const back = put(box(.64, .41, .04, m), .79, 1.1, -2.37); back.rotation.y = -.45; put(box(.06, .2, .06, m), .8, .88, -2.38);
+      put(box(.45, .02, .16, m), .1, .8, -1.98);
+      put(box(.5, .06, .5, m), .1, .46, -1.3); put(box(.5, .6, .06, m), .1, .76, -1.05);
+      const screenGlow = glow('#9CC4FF', .9, .18); screenGlow.position.set(.7, 1.1, -2.25); room.add(screenGlow);
       G.add(room);
-      // outside: a city at night, a launch tower far out on the left, the rocket
       const city = new THREE.Group();
-      for (let i = 0; i < 70; i++) { const x = -60 + hash(i) * 120, z = -40 - hash(i * 3) * 120, w = 3 + hash(i * 5) * 6, h = 4 + Math.pow(hash(i * 7), 2) * 34;
+      for (let i = 0; i < 90; i++) { const x = -90 + hash(i) * 180, z = -40 - hash(i * 3) * 160, w = 3 + hash(i * 5) * 6, h = 4 + Math.pow(hash(i * 7), 2) * 34;
         const b = box(w, h, w, silMat()); b.position.set(x, h / 2 - 48, z); city.add(b);
         for (let j = 0; j < 4; j++) { const win = box(.5, .6, .05, litMat(TOK.gold, 2 + hash(i * 9 + j) * 2)); win.position.set(x + (hash(i * 11 + j) - .5) * w * .8, -48 + hash(i * 13 + j) * h * .9, z + w / 2 + .03); city.add(win); } }
       G.add(city);
-      const tower = box(6, 50, 6, silMat()); tower.position.set(-1150, 17, -1500); G.add(tower);
-      const rocket = new THREE.Group(); rocket.add(cyl(1.6, 1.8, 20, silMat()), Object.assign(new THREE.Mesh(new THREE.ConeGeometry(1.6, 5, 12), silMat()), {})); rocket.children[1].position.y = 12.5;
+      const tower = box(6, 50, 6, silMat()); tower.position.set(120, 17, -1500); G.add(tower);
+      const rocket = new THREE.Group(); rocket.add(cyl(1.6, 1.8, 20, silMat())); const nose = new THREE.Mesh(new THREE.ConeGeometry(1.6, 5, 12), silMat()); nose.position.y = 12.5; rocket.add(nose);
       const flame = glow('#FFD9A0', 30, 0); G.add(rocket, flame);
       const plume = []; for (let i = 0; i < 26; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, color: C('#A0705A'), transparent: true, depthWrite: false, opacity: 0, fog: false })); plume.push(sp); G.add(sp); }
       const p = P.make('w2'); G.add(p.root);
       return { p, rocket, flame, plume };
     },
     frame(s, lt, dur, t, { camera }) {
-      sky({ zen: '#03050E', hor: '#16203C', horK: .5, halo: '#2A3A70', haloW: 2, haloH: .06, sunDir: [-.6, -.2, -1], stars: .5, time: t, fogNear: 60, fogDen: .002 });
-      // the typist: seated, hands on the keys (IK with a little typing jitter), a click on the beat at lt ~1.9
-      P.at(s.p, [1.6, 0, -.32], PI); P.clip(s.p, 'Sitting_Idle_Loop', t);
+      sky({ zen: '#03050E', hor: '#1A2442', horK: .5, halo: '#2E3E78', haloW: 2, haloH: .06, sunDir: [.1, -.2, -1], stars: .5, time: t, fogNear: 60, fogDen: .002 });
+      P.at(s.p, [.1, 0, -1.2], PI); P.clip(s.p, 'Sitting_Idle_Loop', t);
       const click = UP.pulse(t, 14) * (lt > 1.6 && lt < 2.4 ? 1 : 0);
-      const ty = (k, i) => .02 * Math.max(0, noise(t * 9 + i)) * (lt < 1.6 ? 1 : 0);
-      P.reach(s.p, 'l', [1.48, .82 + ty(0, 1), -1.03], [1.2, .9, -.5]);
-      P.reach(s.p, 'r', [1.74, .82 + ty(0, 2) - .015 * click, -1.03], [2.0, .9, -.5]);
+      const ty = i => .02 * Math.max(0, noise(t * 9 + i)) * (lt < 1.6 ? 1 : 0);
+      P.reach(s.p, 'l', [-.02, .82 + ty(1), -1.95], [-.4, .9, -1.4]);
+      P.reach(s.p, 'r', [.22, .82 + ty(2) - .015 * click, -1.95], [.6, .9, -1.4]);
       const turn = smooth(seg(lt, 2.9, 3.6));
-      P.turn(s.p, 'Head', [0, .9 * turn, 0]); P.turn(s.p, 'spine_03', [0, .25 * turn, 0]);
-      // the launch: lifts off at lt 2.3, far out through the window
-      const L = Math.max(0, lt - 2.3), ry = -8 + 4.9 * L * L * 1.4;
-      const RX = -1150, RZ = -1500, ry2 = -8 + 4.9 * L * L * 6;
-      s.rocket.position.set(RX, ry2 + 10, RZ); s.rocket.scale.setScalar(2.2); s.flame.position.set(RX, ry2 - 4, RZ); setGlow(s.flame, lt > 2.3 ? 2.6 * (.85 + .15 * noise(t * 20)) : 0, 60 + 30 * Math.min(1, L));
+      P.turn(s.p, 'Head', [0, -.5 * turn, 0]);
+      const L = Math.max(0, lt - 2.3), RX = 120, RZ = -1500, ry = -8 + 4.9 * L * L * 6;
+      s.rocket.position.set(RX, ry + 10, RZ); s.rocket.scale.setScalar(2.2); s.flame.position.set(RX, ry - 4, RZ); setGlow(s.flame, lt > 2.3 ? 2.6 * (.85 + .15 * noise(t * 20)) : 0, 60 + 30 * Math.min(1, L));
       s.plume.forEach((sp, i) => { const a = i / s.plume.length, tb = 2.3 + a * Math.max(.01, L), y = -8 + 4.9 * Math.pow(tb - 2.3, 2) * 6;
         sp.position.set(RX + noise(i * 1.3) * 8 * (L - (tb - 2.3)), y, RZ); sp.scale.setScalar(30 + 50 * (L - (tb - 2.3))); sp.material.opacity = lt > 2.3 ? .5 * (1 - a * .3) : 0; });
       const k = smooth(seg(lt, 0, 5.2));
-      cam(camera, [lerp(3.4, 3.1, k), 1.25, lerp(1.6, 1.3, k)], [lerp(1.4, -.6, smooth(seg(lt, 2.2, 3.6))), lerp(1.05, 1.5, smooth(seg(lt, 2.2, 3.6))), -2.2], 46);
+      cam(camera, [lerp(-.6, -.4, k), 1.4, lerp(.55, .2, k)], [lerp(.25, .45, k), lerp(1.2, 1.5, smooth(seg(lt, 2.2, 3.6))), -3], 42);
     },
   });
 
@@ -212,7 +212,7 @@
   });
 
   // ======================================================== S25 the crossing: stars stream past, a new world
-  SHOT({ id: 'S25', t0: 158.10, t1: LINE(21)[0], out: { kind: 'flash', d: 1.4, col: '#CFE0FF' },
+  SHOT({ id: 'S25', t0: 158.10, t1: LINE(21)[0], out: { kind: 'flash', d: 1.0, col: '#7F94B8' },
     build(G) {
       // streaking stars: segments whose length follows the speed
       const N = 1400, pos = new Float32Array(N * 6), g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));

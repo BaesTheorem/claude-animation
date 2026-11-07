@@ -37,11 +37,23 @@
   SHOT({ id: 'S15', t0: T15, t1: T16, out: { kind: 'cross', d: 1.0 },
     build(G) {
       const plane = biplane(); G.add(plane);
-      const below = cloudSlab({ n: 70, box: [-200, 700, 335, 360, -220, 140], col: '#6A4A5E', op: .8, size: 110, seed: 1 });
-      const layer = cloudSlab({ n: 130, box: [-150, 600, 360, 395, -160, 110], col: '#8A6070', op: .9, size: 90, seed: 2 });
+      const below = cloudSlab({ n: 30, box: [-200, 700, 250, 285, -220, 140], col: '#4A3448', op: .6, size: 90, seed: 1 });
+      const layer = cloudSlab({ n: 55, box: [-150, 500, 300, 336, -120, 90], col: '#7A5468', op: .55, size: 70, seed: 2 });
       const tops = cloudSlab({ n: 110, box: [-100, 900, 390, 405, -400, 200], col: '#3A3050', op: .95, size: 170, seed: 3 });
+      // a sea of cloud tops below, lit toward the sunset
+      const seaM = new THREE.ShaderMaterial({ uniforms: { ...UP.U }, transparent: true, depthWrite: false,
+        vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+        fragmentShader: UP.SKY_GLSL + `varying vec3 vW;
+          void main(){ vec2 p = vW.xz * .006; float n = ufbm(vec3(p, uTime * .01)), n2 = ufbm(vec3(p * 3.1 + 4., 1.));
+            float cov = smoothstep(.36, .62, n * .8 + n2 * .35);
+            vec3 v = normalize(vW - cameraPosition); float toward = pow(max(dot(normalize(vec3(v.x, 0., v.z)), normalize(vec3(uSunDir.x, 0., uSunDir.z))), 0.), 3.);
+            vec3 lit = mix(vec3(.08, .06, .15), vec3(.62, .3, .2), toward * (.35 + .65 * n2));
+            vec3 c = mix(skyBase(v) * .7, lit, cov);
+            float dd = length(vW - cameraPosition); c = mix(c, skyBase(v), clamp(1. - exp(-dd * .00035), 0., .85));
+            gl_FragColor = vec4(c, smoothstep(.0, .2, cov) * .97); }` });
+      const sea = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000, 1, 1), seaM); sea.rotation.x = -PI / 2; sea.position.y = 338; G.add(sea);
       G.add(below, layer, tops);
-      return { plane, layer, tops };
+      return { plane, layer, tops, sea };
     },
     frame(s, lt, dur, t, { camera }) {
       const k = smooth(seg(lt, 2.4, 5.0));
@@ -49,11 +61,12 @@
       const NIGHT = { zen: '#05081A', hor: '#3A2C4E', horK: .45, halo: '#9A4A3A', haloW: 4, haloH: .035, sunDir: [1, -.1, -.25], sunGlow: .2, stars: .9, milky: .4 };
       sky({ ...skyMix(DUSK, NIGHT, k), time: t, fogNear: 400, fogDen: .0004 });
       const ang = lerp(.42, .12, smooth(seg(lt, 3.6, 5.3))), sp = 46;
-      const x = sp * lt * Math.cos(.38), y = 300 + sp * lt * Math.sin(.38) * lerp(1, .55, smooth(seg(lt, 3.6, 5.3)));
+      const x = sp * lt * Math.cos(.38), y = 262 + sp * lt * Math.sin(.38) * lerp(1, .85, smooth(seg(lt, 3.6, 5.3)));
       s.plane.position.set(x, y, 0); s.plane.rotation.set(0, 0, ang); s.plane.children[s.plane.children.length - 5].rotation.x = t * 40;
       // camera: below and behind, looking up at the plane; rises with it through the layer
-      const off = v3([lerp(-26, -30, k), lerp(-12, -3, k), lerp(14, 16, k)]);
-      cam(camera, [x + off.x, y + off.y, off.z], [x + 6, y + lerp(4, 0, k), 0], lerp(40, 46, k));
+      s.tops.visible = false;
+      const off = v3([lerp(-26, -34, k), lerp(-12, 9, k), lerp(14, 12, k)]);
+      cam(camera, [x + off.x, y + off.y, off.z], [x + 8, y + lerp(4, -4, k), lerp(0, -6, k)], lerp(40, 50, k));
     },
   });
 
@@ -217,7 +230,7 @@
       const h = s.land.userData.height;
       // climbs over the ledge (0-2.2) then stands on the summit facing the sunrise
       const cx = lerp(-.45, .55, smooth(seg(lt, .3, 2.0)));
-      P.at(s.p, [cx, h(cx, 0) + (lt < 2.0 ? lerp(-1.0, 0, smooth(seg(lt, .2, 1.9))) : 0), 0], PI / 2);
+      P.at(s.p, [cx, h(cx, 0) - 1.0 + smooth(seg(lt, 2.1, 2.8)) * 1.0, 0], PI / 2);
       if (lt < 2.2) P.clip(s.p, 'ClimbUp_1m', lt * .9, { loop: false }); else P.blend(s.p, 'ClimbUp_1m', 9, 'Idle_Loop', lt, smooth(seg(lt, 2.2, 2.8)), { a: { loop: false } });
       const hand = P.hand(s.p, 'r');
       const near = 1 - smooth(seg(lt, 1.6, 3.4));

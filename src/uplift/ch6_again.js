@@ -82,10 +82,10 @@
       const sx = -2.2, sz = 2.2; P.at(b.sower, [sx, h(sx, sz), sz], -PI * .35);
       P.clip(b.sower, lt > 4.6 ? 'Farm_PlantSeed' : 'Idle_Loop', lt > 4.6 ? lt - 4.6 : t, { loop: lt <= 4.6 });
       const hs = P.hand(b.sower, 'r'); s.seed.position.copy(hs); s.seed.visible = lt > 4.6;
-      const pull = ease(seg(lt, 3.6, 6.0)), C = pel.clone().add(v3([-.36, .22, 0]));
+      const pull = ease(seg(lt, 3.6, 6.0)), C = pel.clone().add(v3([-.36, .32, 0]));
       const look = C.clone().lerp(v3([-1.2, h(-1.2, .6) + .7, .6]), pull);
       const cp = C.clone().add(v3([0, -.05, 2.6])).lerp(v3([-.8, h(-.8, 5.4) + 1.15, 5.4]), pull);
-      cam(camera, cp.toArray(), look.toArray(), lerp(15, 40, smooth(seg(lt, 3.6, 4.8))));
+      cam(camera, cp.toArray(), look.toArray(), lerp(19.5, 40, smooth(seg(lt, 3.6, 4.8))));
     },
   });
 
@@ -98,7 +98,7 @@
       plants(G, land, 50, [-20, 60, -70, -9], 7);
       ringArc(G);
       const band = ['m1', 'w2', 'm3', 'girl', 'w1'].map(n => P.make(n)); band.forEach(p => G.add(p.root));
-      const herd = [P.beast('cow', 1.15), P.beast('bull', 1.2), P.beast('cow', 1.1)]; herd.forEach(b => G.add(b.root));
+      const herd = [P.beast('cow', .85), P.beast('bull', .9), P.beast('cow', .82)]; herd.forEach(b => G.add(b.root));
       const poles = []; for (let i = 0; i < 8; i++) { const r = rod(.04); poles.push(r); G.add(r); }
       const builders = [P.make('m2'), P.make('w1')]; builders.forEach(p => G.add(p.root));
       return { land, band, herd, poles, builders };
@@ -109,7 +109,7 @@
       const h = s.land.userData.height;
       const X = [0, 1.4, -1.5, -2.6, -3.9], Z = [-3.4, -4.6, -4.0, -3.7, -5.1];
       s.band.forEach((p, i) => { const x = X[i] + WALK_V * lt, z = Z[i]; P.at(p, [x, h(x, z), z], PI / 2); P.clip(p, 'Walk_Loop', t + i * .37); });
-      s.herd.forEach((b, i) => { const x = -3.5 - i * 2.6 + WALK_V * lt, z = -9.5 - i * 1.1; P.at(b, [x, h(x, z), z], PI / 2); P.clip(b, 'Walk', t + i * .5, { speed: .9 }); });
+      s.herd.forEach((b, i) => { const x = -3.5 - i * 2.6 + WALK_V * lt, z = -13 - i * 1.1; P.at(b, [x, h(x, z), z], PI / 2); P.clip(b, 'Walk', t + i * .5, { speed: .9 }); });
       // the shelter: a frame of poles rising on a low rise behind the walkers (as S06's hut)
       const [hx, hz] = [9, -16];
       s.poles.forEach((r, i) => {
@@ -133,7 +133,7 @@
       const f = fire({ scale: .9, seed: 9 }); G.add(f);
       const shelter = []; for (let i = 0; i < 8; i++) { const r = rod(.04); shelter.push(r); G.add(r); }
       const ppl = [P.make('w1'), P.make('m1'), P.make('girl')]; ppl.forEach(p => G.add(p.root));
-      const home = glow('#FFE08A', 4, 0); G.add(home);
+      const home = glow('#FFD870', 4, 0); G.add(home);
       return { land, f, shelter, ppl, home };
     },
     frame(s, lt, dur, t, { camera, PX }) {
@@ -147,9 +147,9 @@
       const k = ease(seg(lt, 0, 3.6)), pitch = lerp(.02, 1.05, k);
       const cpos = v3([0, y0 + lerp(1.2, 3.4, k), lerp(4.6, 3.2, k)]);
       cam(camera, cpos.toArray(), [0, cpos.y + Math.sin(pitch) * 50 - (1 - k) * 1.2, cpos.z - Math.cos(pitch) * 50], 40);
-      const hd = v3([.08, Math.sin(1.05 + .1), -Math.cos(1.05 + .1)]).normalize();
+      const hd = v3([-.26, Math.sin(1.05 + .09), -Math.cos(1.05 + .09)]).normalize();
       s.home.position.copy(cpos).addScaledVector(hd, 800);
-      setGlow(s.home, smooth(seg(lt, 1.2, 2.2)) * (2.2 + .5 * Math.sin(t * 5.3) * Math.sin(t * 2.1)), 9);
+      setGlow(s.home, smooth(seg(lt, 1.4, 2.4)) * (3.2 + .6 * Math.sin(t * 3.1) * Math.sin(t * 1.7)), 15);
     },
   });
 })();

@@ -182,7 +182,8 @@ window.UP = (() => {
   const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(sp, 3)); sg.setAttribute('a', new THREE.BufferAttribute(sa, 2));
   const starMat = new THREE.ShaderMaterial({
     uniforms: { uK: { value: 0 }, uTime: { value: 0 }, uYaw: { value: 0 }, uPx: { value: 1 } },
-    transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+    // drawn in the opaque pass right after the sky dome (renderOrder -9), so every silhouette covers them
+    transparent: false, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
     vertexShader: `attribute vec2 a; uniform float uK, uTime, uYaw, uPx; varying float vB; varying float vW;
       void main(){ float c = cos(uYaw), s = sin(uYaw); vec3 p = vec3(c * position.x - s * position.z, position.y, s * position.x + c * position.z);
         vB = (a.x * 1.4 + .25) * uK * (.72 + .28 * sin(uTime * (1.3 + fract(a.y) * 3.) + a.y * 7.)); vW = fract(a.y * 3.17);

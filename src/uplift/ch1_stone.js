@@ -136,10 +136,10 @@
       P.at(b.w2, [-1.0, h(-1.0, -2.1), -2.1], PI * .15); P.clip(b.w2, 'Idle_Loop', t);
       const up = smooth(seg(lt, 3.9, 4.7));                       // w2 holds a new flake up to the flame
       if (up > 0) { const hr = P.hand(b.w2, 'r'); P.reach(b.w2, 'r', hr.lerp(v3([-.85, h(-.85, -1.9) + 2.0, -1.9]), up).toArray(), [-1.4, 1.4, -2.6]); }
-      const pull = ease(seg(lt, 3.2, 5.8)), C = pel.clone().add(v3([-.36, .22, 0]));
+      const pull = ease(seg(lt, 3.2, 5.8)), C = pel.clone().add(v3([-.36, .32, 0]));
       const look = C.clone().lerp(v3([-.6, h(-.6, -.6) + .75, -.6]), pull);
       const cp = C.clone().add(v3([0, -.05, 2.6])).lerp(v3([-2.9, h(-2.9, 3.4) + 1.15, 3.4]), pull);
-      cam(camera, cp.toArray(), look.toArray(), lerp(15, 38, smooth(seg(lt, 3.2, 4.4))));
+      cam(camera, cp.toArray(), look.toArray(), lerp(19.5, 38, smooth(seg(lt, 3.2, 4.4))));
     },
   });
 
@@ -217,7 +217,7 @@
   });
 
   // ======================================================== S06 L4: settling, dawn
-  SHOT({ id: 'S06', t0: LINE(4)[0], t1: LINE(5)[0], out: { kind: 'flash', d: 2.6, col: '#FFE2B0' },
+  SHOT({ id: 'S06', t0: LINE(4)[0], t1: LINE(5)[0], out: { kind: 'flash', d: 2.0, col: '#FFE2B0' },
     build(G) {
       const hf = (x, z) => z > -8 ? 0 : z > -42 ? -1.6 : -1.6 + (1 - Math.exp(-(-42 - z) / 30)) * 7 + Math.max(0, fbm2(x * .008, z * .008) + .3) * 16 * (1 - Math.exp(-(-42 - z) / 60));
       const land = terrain({ size: 2600, seg: 220, amp: .6, freq: .01, h: hf });
