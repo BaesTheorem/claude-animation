@@ -98,9 +98,11 @@ top as the line ends (74.5). The sun sets behind the obelisk, smoke drifts acros
 into a dark engine house. A stoker shovels coal into a firebox that blooms red. Tilt up: the piston drives
 the beam, and the flywheel makes its first turn.
 
-**S12 L10 83.59–89.05** [match cut: the flywheel becomes a locomotive's driving wheel] Dusk, low angle. A
-steam locomotive, firebox glowing, smoke streaming, runs left to right and overtakes a galloping horse and
-rider on the road beside the track. A mill with lit windows and turning gears stands behind.
+**S12 L10 83.59–89.05** [match cut: the flywheel becomes the mill's drive wheel] Changed after Alex's review
+of the animatic: the line pictures cogs that spin wool, and steel horses that are automobiles. First bar:
+inside a wool mill at dusk, a spinning mule driven by belts from the line shaft; the carriage runs out while
+the spindles twist the threads, then runs back while the yarn winds on. Second bar (cut on the middle
+downbeat): early automobiles pass a horse-drawn carriage on a road at dusk, and the horse is left behind.
 
 **S13 L11 89.05–94.44** [smoke wipe] Night falls on a city street. A hand throws a knife switch, and a spark
 jumps. Streetlights and windows switch on in a wave from near to far, and the dark is pushed to the horizon.
@@ -111,8 +113,11 @@ of the line. Change it in review if the line says something else.)
 
 ### Instrumental: the loudest guitar
 
-**S15 101.08–106.44** [camera move carries] The camera follows the aircraft up through the clouds into the
-night. Below, the lights of the land come on.
+**S15 101.08–106.44** [camera move carries] The camera follows the aircraft up through the clouds. At each
+cloud bank it passes through (on the beats at 102.44, 103.80 and 105.14) it comes out as the next age's
+aircraft: a 1930s twin-engine propeller airliner, a 1950s four-engine swept-wing jet, then a modern
+twin-engine widebody, which climbs above the cloud sea into the night with its navigation lights on and
+contrails behind it. (Added at Alex's request.)
 
 **S16 106.44–114.19** [cloud wipe] The stratosphere at night. The lights of cities, roads and rails spread
 across the dark continent. At the end a storm rolls in under the camera and the lights go dim.
@@ -164,7 +169,7 @@ cold sun and two moons.
 stars. One small yellow star is home.
 - reads: 176.5–178.5 the tilt up · 178.5–179.6 the yellow star · 179.6–180.7 fade to black on the last ring.
 
-[out: fade to black]
+[out: fade to black, then a 5-second credit card: the song, its writer, its singer and the album]
 
 ## Checks
 
@@ -174,3 +179,11 @@ stars. One small yellow star is home.
 - A transition at every seam: named above. Hard cuts are on downbeats or on action.
 - No text anywhere. The animatic burns in a small shot number and timecode for review only.
 - The ending rhymes with the opening: S28 against S01, S26 against S03, S27 against S04.
+
+## Final version (2026-11-07 evening)
+
+- Rim light on every silhouette, from each shot's key light; fires light the edges near them.
+- Era costumes: furs in the stone age, tunics, robes and head cloths in the ancient world, caps, bowlers and
+  aprons in the industrial age, hooded cloaks for the climb, packs and hoods for the settlers.
+- Motion blur (four sub-frames per frame, never across a hard cut), 1920 x 1080 at 24 fps.
+- The Earth uses NASA's Black Marble 2016 and Blue Marble images.
