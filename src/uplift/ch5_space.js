@@ -170,7 +170,7 @@
     frame(s, lt, dur, t, { camera }) {
       sky({ zen: '#000105', hor: '#000105', stars: .9, milky: .35, skyYaw: 2.6, time: t });
       const sun = v3([-.7, .2, -.68]).normalize(); s.e.userData.u.uSun.value.copy(sun);
-      s.e.rotation.y = .9 + lt * .01; s.e.updateMatrixWorld(true);
+      s.e.rotation.y = -1.92 + lt * .01; s.e.updateMatrixWorld(true);       // Europe, Africa and the Middle East face the camera
       const u = s.e.userData.u, R = new THREE.Matrix3().setFromMatrix4(s.e.matrixWorld);
       RING_AT.forEach(([la, lo], i) => { const c = ll(la, lo).applyMatrix3(R).normalize(); u.uRingC.value[i].copy(c); const t0 = .4 + i * .35; u.uRingR.value[i] = lt > t0 ? (lt - t0) * .42 : -1; });
       u.uRingK.value = 1;
@@ -182,8 +182,8 @@
         RING_AT.forEach((_, j) => { const rr = u.uRingR.value[j]; if (rr < 0) return; const ang = Math.acos(clamp(n.dot(u.uRingC.value[j]), -1, 1)); k = Math.max(k, Math.exp(-Math.pow((ang - rr) / .05, 2))); });
         setGlow(g.userData.bl, 2.4 * k + .15, 6 + 8 * k);
       });
-      const D = 245, cp = v3([0, 70, D]).applyAxisAngle(v3([0, 1, 0]), .1 - lt * .02);
-      cam(camera, cp.toArray(), [0, 8, 0], 40);
+      const cp = v3([0, 118, 222]).applyAxisAngle(v3([0, 1, 0]), .08 - lt * .02);
+      cam(camera, cp.toArray(), [0, 14, 0], 40);
     },
   });
 
