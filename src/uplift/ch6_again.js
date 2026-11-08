@@ -66,7 +66,7 @@
       return { land, band, stones, f, sp, hits, seed };
     },
     frame(s, lt, dur, t, { camera, PX }) {
-      sky({ ...ALIEN, time: t, sunDir: [.55, .02, -1], fogNear: 12, fogDen: .004, wind: .3 });
+      sky({ ...ALIEN, time: t, sunDir: [.55, .02, -1], fogNear: 12, fogDen: .004, wind: .3, rimK: 1.3 });
       const h = s.land.userData.height, b = s.band, KP = [.45, h(.45, .05), .05];
       P.at(b.k, KP, -PI / 2); P.clip(b.k, 'Sitting_Idle_Loop', t);
       const kn = knap(b.k, t, s.hits, 1 - smooth(seg(lt, 2.6, 3.3)));
@@ -105,10 +105,11 @@
     },
     frame(s, lt, dur, t, { camera }) {
       const el = kf(lt, [[0, -.02], [2.5, .015], [6.3, .05]], x => x);
-      sky({ ...ALIEN, time: t, sunDir: [.6, el, -1], sunSize: el > -.01 ? .011 : 0, fogNear: 20, fogDen: .004 });
+      sky({ ...ALIEN, time: t, sunDir: [.6, el, -1], sunSize: el > -.01 ? .011 : 0, fogNear: 20, fogDen: .004, rimK: 1.4 });
       const h = s.land.userData.height;
       const X = [0, 1.4, -1.5, -2.6, -3.9], Z = [-3.4, -4.6, -4.0, -3.7, -5.1];
-      s.band.forEach((p, i) => { const x = X[i] + WALK_V * lt, z = Z[i]; P.at(p, [x, h(x, z), z], PI / 2); P.clip(p, 'Walk_Loop', t + i * .37); });
+      // clip speed from the measured stride (Walk_Loop's planted foot moves 0.916 m/s at height 1), so no foot slides
+      s.band.forEach((p, i) => { const x = X[i] + WALK_V * lt, z = Z[i]; P.at(p, [x, h(x, z), z], PI / 2); P.clip(p, 'Walk_Loop', t * WALK_V / (.916 * (p.L.height ?? 1)) + i * .37); });
       s.herd.forEach((b, i) => { const x = -3.5 - i * 2.6 + WALK_V * lt, z = -13 - i * 1.1; P.at(b, [x, h(x, z), z], PI / 2); P.clip(b, 'Walk', t + i * .5, { speed: .9 }); });
       // the shelter: a frame of poles rising on a low rise behind the walkers (as S06's hut)
       const [hx, hz] = [9, -16];

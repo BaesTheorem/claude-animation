@@ -129,6 +129,7 @@
         for (let j = 0; j < 4; j++) { const win = box(.5, .6, .05, litMat(TOK.gold, 2 + hash(i * 9 + j) * 2)); win.position.set(x + (hash(i * 11 + j) - .5) * w * .8, -48 + hash(i * 13 + j) * h * .9, z + w / 2 + .03); city.add(win); } }
       G.add(city);
       const tower = box(6, 50, 6, silMat()); tower.position.set(120, 17, -1500); G.add(tower);
+      for (let i = 0; i < 7; i++) { const g = glow('#FFB060', 160 + 80 * hash(i), .22); g.position.set(-500 + i * 170, -70, -420 - hash(i * 3) * 300); G.add(g); }   // the city's glow below the sill
       const rocket = new THREE.Group(); rocket.add(cyl(1.6, 1.8, 20, silMat())); const nose = new THREE.Mesh(new THREE.ConeGeometry(1.6, 5, 12), silMat()); nose.position.y = 12.5; rocket.add(nose);
       const flame = glow('#FFD9A0', 30, 0); G.add(rocket, flame);
       const plume = []; for (let i = 0; i < 26; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, color: C('#A0705A'), transparent: true, depthWrite: false, opacity: 0, fog: false })); plume.push(sp); G.add(sp); }
@@ -199,14 +200,15 @@
       const sun = v3([.3, .25, .92]).normalize(); s.e.userData.u.uSun.value.copy(sun); s.e.rotation.y = 2.2;
       // the ship moves +x (screen right) away from the Earth on the left, accelerating
       const go = 3 * lt + 9 * lt * lt, dir = v3([.78, .06, -.62]).normalize();
-      const sp = v3([118, 56, 372]).addScaledVector(dir, go); s.ship.position.copy(sp); s.ship.lookAt(sp.clone().add(dir)); s.ship.rotateY(-PI / 2);
+      const sp = v3([50, 51, 352]).addScaledVector(dir, go); s.ship.position.copy(sp); s.ship.lookAt(sp.clone().add(dir)); s.ship.rotateY(-PI / 2);
       const x = sp.x;
       const fill = smooth(seg(lt, .6, 2.0));
       s.sl.userData.set(1, fill * .85);
       const sc = 5;
       [[0, sc], [0, -sc], [sc, 0], [-sc, 0]].forEach(([y, z], i) => setRod(s.lines[i], [-.9, 0, 0], [1.8, y, z]));
       s.star.position.set(1300, 150, -560); setGlow(s.star, 2 + 1.5 * smooth(seg(lt, 1, 5)), 26);
-      cam(camera, [70 + lt * 4, 62, 418 + lt * 6], [lerp(70, 160, smooth(seg(lt, .5, 5))), 48, 250], 46);
+      const look = v3([10, 20, 120]).lerp(sp, .35 + .5 * smooth(seg(lt, .8, 5)));
+      cam(camera, [62 + lt * 3, 63, 426 + lt * 5], look.toArray(), 46);
     },
   });
 

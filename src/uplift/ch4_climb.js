@@ -213,7 +213,7 @@
     build(G) {
       const land = terrain({ size: 2000, seg: 160, amp: .5, freq: .02, fog: .45, h: (x, z) => .25 * fbm2(x * .2, z * .2) + 30 * Math.max(0, -z - 300) / 700 });
       G.add(land, water({ w: 2000, d: 2000, y: .02, dark: .5 }));
-      G.add(grass({ area: [-30, 30, -40, 4], n: 6000, h: 1.2, ground: land.userData.height, clear: [[0, -3.5, 3.2], [-1.5, 3.8, 2.5]] }));
+      G.add(grass({ area: [-30, 30, -40, 4], n: 6000, h: 1.2, ground: land.userData.height, clear: [[0, -3.5, 3.2], [-1.0, 2.6, 3.6]] }));
       const p = P.make('m1', { outfit: ['tunic', 'hood'] }); G.add(p.root);
       const rain = streak({ n: 2500, box: [30, 16, 30], dir: [1.5, -14, 0], size: 40, max: 4, col: '#9AA8C0' }); rain.position.set(0, 6, -4); G.add(rain);
       return { land, p, rain };
@@ -269,13 +269,16 @@
   // then turns and climbs to the right.
   SHOT({ id: 'S19', t0: LINE(15)[0], t1: LINE(16)[0], out: { kind: 'cut' },
     build(G) {
-      const hf = (x, z) => x > 0 ? Math.pow(x, 1.2) * .3 + .6 * fbm2(x * .2, z * .2) : -Math.pow(-x, 1.2) * .38 + .3 * fbm2(x * .05, z * .05);
-      const land = terrain({ size: 2400, seg: 240, amp: .5, freq: .03, fog: .45, h: hf });
+      // the fork sits on a crest that runs along x: it climbs to the right, falls to the left toward the valley,
+      // and the ground drops away in front of and behind the crest, so the climber stands against the sky
+      const crest = x => x > 0 ? Math.pow(x, 1.2) * .3 : -Math.pow(-x, 1.2) * .38;
+      const hf = (x, z) => crest(x) - .07 * z * z / (1 + z * z / 400) + .5 * fbm2(x * .15, z * .15);
+      const land = terrain({ size: 2400, seg: 240, amp: .5, freq: .03, fog: .45, rim: .12, h: hf });
       G.add(land);
-      for (let i = 0; i < 30; i++) { const x = 1.5 + hash(i) * 26, z = -8 + hash(i * 3) * 10, r = sph(.4 + hash(i * 7) * 1.1); r.scale.set(1.3, .85, 1); r.position.set(x, hf(x, z) - .05, z); G.add(r); }
+      for (let i = 0; i < 30; i++) { const x = 1.5 + hash(i) * 26, z = -8 + hash(i * 3) * 10, r = UP.rock(.5 + hash(i * 7) * 1.2, i, .75); r.position.set(x, hf(x, z) - .1, z); G.add(r); }
       const valley = new THREE.Group();
-      for (let i = 0; i < 90; i++) { const x = -22 - hash(i) * 70, z = -18 - hash(i * 2) * 70, y = hf(x, z); const b = box(.9, .7, .2, litMat(TOK.gold, 2 + hash(i * 5) * 2.5)); b.position.set(x, y + .8 + hash(i * 3) * 2.5, z); valley.add(b); }
-      for (let i = 0; i < 7; i++) { const x = -30 - hash(i) * 50, z = -30 - hash(i * 4) * 50, g = glow('#FFB060', 30 + 20 * hash(i), .45); g.position.set(x, hf(x, z) + 5, z); valley.add(g); }
+      for (let i = 0; i < 90; i++) { const x = -12 - hash(i) * 46, z = -22 - hash(i * 2) * 60, y = hf(x, z); const b = box(.9, .7, .2, litMat(TOK.gold, 2 + hash(i * 5) * 2.5)); b.position.set(x, y + .8 + hash(i * 3) * 2.5, z); valley.add(b); }
+      for (let i = 0; i < 7; i++) { const x = -18 - hash(i) * 34, z = -32 - hash(i * 4) * 40, g = glow('#FFB060', 26 + 16 * hash(i), .5); g.position.set(x, hf(x, z) + 5, z); valley.add(g); }
       for (let i = 0; i < 14; i++) { const u = i / 13, x = lerp(-1.5, -30, u), z = lerp(-1, -24, u * u), g = glow('#FFC070', .7, 1.5); g.position.set(x, hf(x, z) + .8, z); valley.add(g); }
       G.add(valley);
       const p = P.make('m3', { outfit: ['cloak', 'hood', 'pack'] }); G.add(p.root);
@@ -294,7 +297,8 @@
       s.lamp.position.copy(P.hand(s.p, 'r')).add(v3([0, -.15, 0]));
       s.snow.userData.update(t, .55, PX);
       const fx = lerp(-2.5, 1.8, smooth(seg(lt, 2.2, 5.2)));
-      gcam(camera, s.land, [fx, 1.0, 10.5], [fx, h(Math.max(fx, 0), 0) + lerp(-.6, 1.5, smooth(seg(lt, 2.2, 5.2))), 0], 50);
+      const cy = h(x, 0);                                  // heights from the climber's ground, not the camera's
+      cam(camera, [fx - .8, cy - .9, 6.2], [x * .8 + fx * .2, cy + 1.35, 0], 46);
     },
   });
 
@@ -304,7 +308,7 @@
       const hf = (x, z) => x < 0 ? Math.max(-6, 1.1 * x) : -.1 * x + .4 * fbm2(x * .3, z * .3);   // a ledge at x = 0, the summit to the right
       const land = terrain({ size: 6000, seg: 260, amp: .4, freq: .05, fog: .5, h: (x, z) => hf(x, z) - 1400 * (1 - Math.exp(-Math.max(0, Math.hypot(x, z) - 40) / 900)) });
       G.add(land);
-      const p = P.make('m3', { outfit: ['cloak', 'hood', 'pack'] }); G.add(p.root);
+      const p = P.make('m3', { outfit: ['cloak', 'hood'] }); G.add(p.root);
       return { land, p };
     },
     frame(s, lt, dur, t, { camera }) {
