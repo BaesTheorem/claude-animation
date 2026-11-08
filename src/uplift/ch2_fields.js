@@ -66,7 +66,9 @@
   }
 
   // ======================================================== S07 L5: the plough and the rain
-  const S7 = { v: .85, x0: .5, F: [8.5, -6.5], CL: [13, -38] };
+  // Staging: the camera stands ahead of the team and to the right, so both oxen read in three-quarter view; the sun is
+  // behind the team (az -70 deg), and the figure on the rise and the rain cloud stand beyond them to the right.
+  const S7 = { v: .85, x0: .5, F: [-6.5, -8.5], CL: [-19, -35] };
   SHOT({ id: 'S07', t0: LINE(5)[0], t1: LINE(6)[0], out: { kind: 'cross', d: .5 },
     build(G) {
       const land = mkLand(G, { size: 300, seg: 150, amp: .22, col: EARTH });
@@ -74,7 +76,7 @@
       const yoke = rod(.06), pole = rod(.04), stock = rod(.05), grip = rod(.04), brace = rod(.03);
       const share = cone(.09, .42, silMat(), 8);
       G.add(yoke, pole, stock, grip, brace, share);
-      const plowman = P.make('m1'), sower = P.make('w2'), prayer = P.make('m3');
+      const plowman = P.make('m1', { outfit: ['tunic'] }), sower = P.make('w2', { outfit: ['tunic', 'cloth'] }), prayer = P.make('m3', { outfit: ['robe', 'cloth'] });
       G.add(plowman.root, sower.root, prayer.root);
       const furrow = box(1, .05, .3); G.add(furrow);
       const old = [-2.1, -1.2, 1.4, 2.3, 3.2].map(z => { const b = box(120, .04, .22); b.position.set(-10, land.userData.height(-10, z) + .02, z); G.add(b); return b; });
@@ -103,14 +105,14 @@
       const sd = V(1, -.5, 0).normalize(); s.share.quaternion.setFromUnitVectors(V(0, 1, 0), sd); s.share.position.copy(S).addScaledVector(sd, -.17);
       // the ploughman walks behind with both hands on the handle
       const pm = s.plowman, px = H.x - .62;
-      P.at(pm, [px, h(px, 0), 0], PI / 2); P.clip(pm, 'Walk_Loop', t * .62);
+      P.at(pm, [px, h(px, 0), 0], PI / 2); P.clip(pm, 'Walk_Loop', t * S7.v / .916);   // clip stride .916 m/s per metre of height (measured)
       arm(pm, 'l', [H.x, H.y, H.z - .2]); arm(pm, 'r', [H.x, H.y, H.z + .2]);
       // the furrow behind the share
       const fx0 = -30, fl = Sx - fx0; s.furrow.scale.set(fl, 1, 1); s.furrow.position.set(fx0 + fl / 2, h(Sx - 4, 0) + .02, 0);
       // the sower, further back, casts seed
       const sw = s.sower, sx = px - 2.7, sz = .85;
       P.at(sw, [sx, h(sx, sz), sz], PI / 2);
-      P.blend(sw, 'Walk_Loop', t * .62, 'Farm_PlantSeed', t, .999, { b: { only: ['spine', 'neck', 'Head', 'clavicle', 'upperarm', 'lowerarm', 'hand'] } });
+      P.blend(sw, 'Walk_Loop', t * S7.v / (.916 * .97), 'Farm_PlantSeed', t, .999, { b: { only: ['spine', 'neck', 'Head', 'clavicle', 'upperarm', 'lowerarm', 'hand'] } });
       const T = 1.15, N = 40, Mx = new THREE.Matrix4();
       for (let i = 0; i < N; i++) {
         const ph = t / T + i / N, c = Math.floor(ph), tl = (c - i / N) * T, tau = Math.min(t - tl, .58);
@@ -132,7 +134,7 @@
       // the rain answers the raised arms at about 54.5 s
       const u = s.veil.material.uniforms; u.uTime.value = t; u.uK.value = smooth(seg(t, 54.45, 55.3)); u.uReveal.value = easeOut(seg(t, 54.45, 55.9));
       // camera low, a little ahead of the team, looking back along it
-      gcam(camera, s.land, [X + 1.2 + .2 * lt, .95, 8.5], [X - 1.2, h(X, 0) + 2.3, 0], 46);
+      gcam(camera, s.land, [X + 7.0 + .3 * lt, .85, 4.9 - .1 * lt], [X - 1.0 - .2 * lt, h(X, 0) + 1.55, -.3], 44);
     },
   });
 
@@ -197,6 +199,26 @@
     cam(camera, pos, look, lerp(b.fov, END.fov, c));
   }
 
+  // A real sheaf, origin at the binding: stalks are two straight segments (cut end to the tie, tie to the ear) that
+  // pass through a tight bundle at y = 0 and fan out above; each ends in an ear (a thin cone); a cord ring ties it.
+  function mkSheaf() {
+    const g = new THREE.Group(), N = 46, segs = [], ears = [];
+    for (let i = 0; i < N; i++) {
+      const a = hash(i * 2.3) * TAU, r0 = .04 + hash(i * 3.7) * .06, rt = .02 + hash(i * 5.1) * .03, a2 = a + (hash(i * 7.7) - .5) * .5, rtop = .09 + hash(i * 9.1) * .17;
+      const bot = V(Math.cos(a) * r0, -.4 - hash(i) * .05, Math.sin(a) * r0), tie = V(Math.cos(a) * rt, 0, Math.sin(a) * rt);
+      const top = V(Math.cos(a2) * rtop, .62 + hash(i * 4.4) * .12, Math.sin(a2) * rtop);
+      segs.push([bot, tie], [tie, top]); ears.push(top);
+    }
+    const sm = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 4), silMat(), segs.length), M = new THREE.Matrix4(), Q = new THREE.Quaternion();
+    segs.forEach(([p0, p1], i) => { const d = p1.clone().sub(p0), L = d.length(); Q.setFromUnitVectors(V(0, 1, 0), d.normalize());
+      M.compose(p0.clone().add(p1).multiplyScalar(.5), Q, V(.0085, L, .0085)); sm.setMatrixAt(i, M); });
+    const em = new THREE.InstancedMesh(new THREE.ConeGeometry(.012, .15, 5), silMat(), ears.length);
+    ears.forEach((p1, i) => { const out = V(p1.x, .0, p1.z).normalize(); Q.setFromUnitVectors(V(0, 1, 0), V(out.x * .35, 1, out.z * .35).normalize());
+      M.compose(p1.clone().add(V(out.x * .03, .07, out.z * .03)), Q, V(1, 1, 1)); em.setMatrixAt(i, M); });
+    const cord = new THREE.Mesh(new THREE.TorusGeometry(.062, .012, 5, 14), silMat()); cord.rotation.x = PI / 2;
+    sm.frustumCulled = em.frustumCulled = false; g.add(sm, em, cord); return g;
+  }
+
   // ======================================================== S08 L6: the harvest and the mill
   SHOT({ id: 'S08', t0: LINE(6)[0], t1: LINE(7)[0], out: { kind: 'cut' },
     build(G) {
@@ -204,16 +226,13 @@
       const hm = (x, z) => .18 + .82 * smooth(clamp((x - .6) / 1.0)) * smooth(clamp((-1.9 - z) / .8));
       G.add(grain({ area: [-14, 5.5, -6.4, 3], n: 18000, h: 1.05, ground: land.userData.height, hmap: hm }));
       const river = mkRiver(G, land);
-      const reaper = P.make('m2'); G.add(reaper.root);
+      const reaper = P.make('m2', { outfit: ['tunic', 'cloth'] }); G.add(reaper.root);
       // the sickle, held in the right hand: a short handle and a curved blade
       const sk = new THREE.Group(), hnd = cyl(.022, .022, .17, null, 6); hnd.position.y = .08;
       const bl = new THREE.Mesh(new THREE.TorusGeometry(.22, .014, 5, 20, PI * .75), silMat()); bl.position.set(-.22, .17, 0);
       sk.add(hnd, bl); reaper.bones.hand_r.add(sk); sk.rotation.set(0, 0, 0);
-      // the sheaf: wide at the cut ends, tied at the waist, flared into the ears
-      const sheaf = new THREE.Group();
-      const s1 = cyl(.1, .2, .45, null, 10); s1.position.y = .22; const s2 = cyl(.3, .09, .5, null, 10); s2.position.y = .7;
-      for (let i = 0; i < 9; i++) { const e = cone(.03, .24, null, 5); e.position.set((hash(i * 3) - .5) * .5, .98 + hash(i) * .05, (hash(i * 5) - .5) * .5); e.rotation.z = (hash(i * 3) - .5) * .5; sheaf.add(e); }
-      sheaf.add(s1, s2);
+      // the sheaf: ~44 stalks, cut ends close together, bound at the waist (origin), ears fanning out at the top
+      const sheaf = mkSheaf();
       G.add(sheaf);
       const stooks = [-5.2, -3.6, -7.0].map((x, i) => { const c = cone(.45, 1.0, null, 8); c.position.set(x, land.userData.height(x, -2.4 + i * .8) + .5, -2.4 + i * .8); G.add(c); return c; });
       void stooks;
@@ -231,7 +250,7 @@
       const mid = base.clone().lerp(top, lift);
       const sheafOn = lt > 1.0;
       s.sheaf.visible = sheafOn; s.sk.visible = lt < 1.2;
-      s.sheaf.position.set(mid.x, mid.y - .55 + .12, mid.z); s.sheaf.rotation.z = -.18 * lift;
+      s.sheaf.position.set(mid.x, mid.y, mid.z); s.sheaf.rotation.z = -.18 * lift; s.sheaf.rotation.y = .5 * lift;
       if (grab > 0) {
         const cl = P.hand(rp, 'l'), cr = P.hand(rp, 'r');
         arm(rp, 'l', cl.lerp(mid.clone().add(V(0, 0, -.2)), grab), .45, .1); arm(rp, 'r', cr.lerp(mid.clone().add(V(0, 0, .2)), grab), .45, .1);
@@ -256,13 +275,26 @@
         im.instanceMatrix.needsUpdate = true;
       } };
   }
-  const W0 = [23, -12];
+  const W0 = [23, -12], rnd0 = (i, k) => hash(i * 12.9898 + k * 78.233 + 5);
   SHOT({ id: 'S09', t0: LINE(7)[0], t1: LINE(8)[0], out: { kind: 'cross', d: 1.2 },
     build(G) {
       const land = mkLand(G, { size: 480, seg: 480, amp: .22, col: '#2C2014', river: true });
       const hm = (x, z) => .18 + .82 * smooth(clamp((x - .6) / 1.0)) * smooth(clamp((-1.9 - z) / .8));
       G.add(grain({ area: [-14, 5.5, -6.4, 3], n: 18000, h: 1.05, ground: land.userData.height, hmap: hm }));
       const river = mkRiver(G, land);
+      // a patchwork of fields (tilled earth, stubble, green barley) so the plain is not one brown sheet; they
+      // appear with the first wave of building, and an irrigation canal runs out from the river
+      const fcol = ['#6A4F2A', '#7C6230', '#51562C', '#8A6B36', '#5D4627', '#4A5A2E'];
+      for (let i = 0; i < 70; i++) {
+        const x = lerp(-110, 150, rnd0(i, 1)), z = -lerp(20, 200, rnd0(i, 2)), w = 14 + rnd0(i, 3) * 26, d = 10 + rnd0(i, 4) * 22;
+        const f = box(w, .04, d, silMat({ col: fcol[i % fcol.length], fog: .35 })); f.position.set(x, .03 + (i % 5) * .004, z); f.rotation.y = (rnd0(i, 5) - .5) * .3; G.add(f);
+      }
+      // crop rows in the near plain, seen in perspective as the camera cranes up and back
+      for (let i = 0; i < 46; i++) {
+        const f = box(3.4, .05, 58, silMat({ col: i % 2 ? '#745A2C' : '#634D28', fog: .3 })); f.position.set(-70 + i * 3.4 + (i > 22 ? 9 : 0), .05, 34); G.add(f);
+      }
+      for (let i = 0; i < 18; i++) { const f = box(3.4, .05, 40, silMat({ col: i % 2 ? '#56602F' : '#6E6A32', fog: .3 })); f.position.set(8 + i * 3.4, .06, -33 - 0); f.position.z = -52; G.add(f); }
+      for (let k = 0; k < 3; k++) { const cn = box(260, .05, 1.2, silMat({ col: '#B8935A', fog: .5 })); cn.position.set(20, .08, -26 - k * 34); G.add(cn); }
       const gb = new THREE.BoxGeometry(1, 1, 1).translate(0, .5, 0), gc = new THREE.ConeGeometry(1, 1, 10).translate(0, .5, 0);
       const gy = new THREE.CylinderGeometry(1, 1, 1, 10).translate(0, .5, 0), gd = new THREE.SphereGeometry(1, 16, 8, 0, TAU, 0, PI / 2);
       const boxes = pop(gb, 900), cones = pop(gc, 160), cyls = pop(gy, 260), domes = pop(gd, 60);
@@ -329,7 +361,10 @@
 
   // ======================================================== S10 L8: the monument and the work song
   const RAMP = x => 6 * clamp((x + 44) / 54), Z0 = -40, OB = [34, -82], CAMZ = -18, FOV10 = 38;
-  const XB1 = 11.5, XB0 = XB1 - 4.7, TARR = 74.5, NW = 10;
+  const XB1 = 11.5, TARR = 74.5, NW = 10, STRIDE_M = .916 * 1.3333;   // metres of ground per walk cycle at height 1 (measured)
+  // walk cycles from the beats (two beats per cycle): the crew steps on the beats, and the block moves one stride per cycle
+  const cycAt = t => { const bi = Math.max(0, beatAt(t)), fr = (t - B[bi]) / (B[bi + 1] - B[bi]); return (bi + fr) / 2; };
+  const CYC0 = () => cycAt(68.25), CYCE = () => cycAt(TARR);
   // the obelisk: tall enough that, from the final camera, its top sits at y = .15 and its base at y = .85
   function obeliskDims() {
     const c = 2, d = CAMZ - OB[1], T = Math.tan(FOV10 / 2 * D), a = Math.atan(.7 * T);
@@ -359,7 +394,8 @@
       for (const z of [-.8, .8]) { const r = box(4.2, .22, .26); r.position.set(.1, .11, z); sled.add(r); }
       sled.add(deck, blk); G.add(sled);
       const names = ['m1', 'm3', 'w1', 'm2', 'w2', 'm1', 'm3', 'w2', 'm2', 'w1'];
-      const crew = names.map(n => P.make(n)), ropes = crew.map(() => rod(.028));
+      const HAUL = [['tunic'], ['tunic', 'cloth'], ['skirt', 'cloth'], ['tunic', 'cloth'], ['tunic'], ['skirt', 'cloth'], ['tunic', 'cloth'], ['tunic'], ['skirt', 'cloth'], ['tunic', 'cloth']];
+      const crew = names.map((n, i) => P.make(n, { outfit: HAUL[i] })), ropes = crew.map(() => rod(.028));
       crew.forEach(c => G.add(c.root)); ropes.forEach(r => G.add(r));
       const smoke = []; for (let i = 0; i < 14; i++) {
         const m = new THREE.SpriteMaterial({ map: puffTex, color: new THREE.Color('#14101A'), transparent: true, depthWrite: false, opacity: 0, fog: false });
@@ -369,21 +405,25 @@
     },
     frame(s, lt, dur, t, { camera }) {
       const u = seg(lt, 0, dur - .5), g = smooth(Math.pow(u, 2.7)), cx = 11 + 23 * g, cz = lerp(-26, CAMZ, g), ph = s.od.phi;
-      const pitch = lerp(.15, ph, smooth(seg(u, .35, 1))), cy = lerp(4.6, 2, smooth(seg(u, .3, 1)));
+      // high at first, so the crew's feet clear the ramp's near edge; it comes down to the final low frame
+      const cy = kf(u, [[0, 9.5], [.5, 9], [.85, 4.5], [1, 2]]);
+      const tr = Math.atan2(7.2 - cy, Math.hypot(14, 1)), pitch = lerp(tr, ph, smooth(seg(u, .45, 1)));
       // the sun sits behind the obelisk and sets
-      const az = Math.atan2(OB[0] - cx, cz - OB[1]), el = kf(t, [[68.25, .3], [74.5, .21], [77.0, -.05], [78.1, -.08]]);
+      // the sun starts to the right of the obelisk (so the shaft is not washed out) and slides behind it as it sets
+      const az = Math.atan2(OB[0] - cx, cz - OB[1]) + .3 * (1 - smooth(seg(t, 72, 76.5))), el = kf(t, [[68.25, .24], [74.5, .2], [77.0, -.05], [78.1, -.08]]);
       const k = smooth(seg(t, 71, 78));
-      sky({ ...skyMix(GOLD, { zen: '#2E3C72', hor: '#FF8A3D', halo: '#FF7A32', haloW: 1.6, haloH: .2, sunCol: '#FFC28A', fogNear: 40 }, k), time: t, sunDir: sunV(az, el), sunSize: .014, sunGlow: .7, fogNear: 50, fogDen: .0022, cloud: .2, cloudCol: '#6A5A80', cloudLit: '#FFB070' });
+      sky({ ...skyMix(GOLD, { zen: '#2E3C72', hor: '#FF8A3D', halo: '#FF7A32', haloW: 1.6, haloH: .2, sunCol: '#FFC28A', fogNear: 40 }, k), time: t, sunDir: sunV(az, el), sunSize: .014, sunGlow: lerp(.3, .7, smooth(seg(t, 72, 76.5))), fogNear: 50, fogDen: .0022, cloud: .2, cloudCol: '#6A5A80', cloudLit: '#FFB070' });
       // the block climbs the ramp; the crew steps on the beats
-      const m = seg(t, 68.25, TARR), xb = XB1 - 4.7 * Math.pow(1 - m, 1.25);
+      // the block climbs the ramp one stride per beat-locked walk cycle, so no foot slides; it stops at TARR
+      const cyc = Math.min(cycAt(t), CYCE()) - CYC0(), xb = XB1 - STRIDE_M * (CYCE() - CYC0()) + STRIDE_M * cyc;
       const slope = 6 / 54, tilt = Math.atan(slope) * (1 - smooth(seg(xb, 9.2, 13)));
       s.sled.position.set(xb, RAMP(xb) + .02, Z0); s.sled.rotation.z = tilt;
-      const bi = beatAt(t), fr = (t - B[bi]) / (B[bi + 1] - B[bi]), cyc = (bi + fr) / 2, done = smooth(seg(t, TARR, TARR + .6));
+      const done = smooth(seg(t, TARR, TARR + .6));
       const anchor = i => V(xb + 1.9 * Math.cos(tilt), RAMP(xb + 1.9) + .5, Z0 + (i % 2 ? .45 : -.45));
       s.crew.forEach((c, i) => {
         const x = xb + 3.6 + i * 1.12, z = Z0 + (i % 2 ? .85 : -.85), y = x > 10 ? 6 : RAMP(x);
         P.at(c, [x, y, z], PI / 2);
-        const wt = (cyc + hash(i * 7) * .08) * P.clipLen('Walk_Loop');
+        const wt = (cyc + hash(i * 7) * .04) * P.clipLen('Walk_Loop');
         if (done > 0) P.blend(c, 'Walk_Loop', wt, 'Idle_Loop', t, done); else P.clip(c, 'Walk_Loop', wt);
         const lean = (1 - done * .8) * .42;
         P.turn(c, 'spine_01', [lean * .5, 0, 0]); P.turn(c, 'spine_02', [lean * .5, 0, 0]);

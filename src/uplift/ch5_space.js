@@ -67,10 +67,13 @@
       const m = new THREE.Mesh(tri, new THREE.MeshBasicMaterial({ color: C('#0C0E16'), side: THREE.DoubleSide })); m.rotation.z = i * PI / 2 + PI / 4 - PI / 4; q.push(m); g.add(m);
     }
     const b1 = rod(.012 * size, dark), b2 = rod(.012 * size, dark); g.add(b1, b2);
+    // the sail's outer edges catch the sunlight, so the diamond reads as it opens against the night side
+    const edges = [0, 1, 2, 3].map(() => { const r = rod(.0035 * size, litMat('#FFE2B0', 1.25)); g.add(r); return r; });
     const hub = glow('#FFF2D8', .5 * size, 0); g.add(hub);
     g.userData.set = (k, glint) => {
       q.forEach(m => { m.scale.setScalar(Math.max(1e-3, size * k * 1.42)); m.material.color.set('#0C0E16').lerp(C('#FFE6B0').multiplyScalar(1.0), glint); });
       const L = 1.42 * size * Math.max(k, 1e-3); setRod(b1, [-L, 0, 0], [L, 0, 0]); setRod(b2, [0, -L, 0], [0, L, 0]);
+      const V = [[L, 0, 0], [0, L, 0], [-L, 0, 0], [0, -L, 0]]; edges.forEach((r, i) => { setRod(r, V[i], V[(i + 1) % 4]); r.visible = k > .02; });
       setGlow(hub, 1.6 * glint, size * (.4 + 1.2 * glint));
     };
     return g;

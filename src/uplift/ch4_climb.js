@@ -245,21 +245,22 @@
   }
   SHOT({ id: 'S18', t0: LINE(14)[0], t1: LINE(15)[0], out: { kind: 'cross', d: 1.1 },
     build(G) {
-      const land = terrain({ size: 9000, seg: 260, amp: 140, freq: .0016, fog: .45, h: (x, z) => peakH(x, z) + 380 * Math.exp(-((x + 1600) * (x + 1600) / (2 * 700 * 700) + (z - MZ - 500) * (z - MZ - 500) / (2 * 600 * 600))) });
+      const land = terrain({ size: 9000, seg: 260, amp: 140, freq: .0016, fog: .3, rim: .12, h: (x, z) => peakH(x, z) + 380 * Math.exp(-((x + 1600) * (x + 1600) / (2 * 700 * 700) + (z - MZ - 500) * (z - MZ - 500) / (2 * 600 * 600))) });
       G.add(land);
       const path = trail(land);
-      const lamps = []; for (let i = 0; i < 46; i++) { const l = glow(TOK.ember, 28, 0); lamps.push(l); G.add(l); }
+      const lamps = []; for (let i = 0; i < 64; i++) { const l = glow(TOK.ember, 28, 0); lamps.push(l); G.add(l); }
       return { land, path, lamps };
     },
     frame(s, lt, dur, t, { camera }) {
       const dawn = smooth(seg(lt, 0, 4.8)) * .4 + .2;
-      sky({ ...SLATE, cloud: .2, time: t, sunDir: [.35, -.1, -1], halo: UP.hexMix('#3A4650', '#9AB0A8', dawn), haloH: .04, stars: .35, fogNear: 300, fogDen: .00035 });
+      sky({ ...SLATE, cloud: .15, time: t, sunDir: [.12, -.07, -1], halo: UP.hexMix('#56707A', '#E0D0A8', dawn), haloW: 4, haloH: .085, stars: .45, fogNear: 300, fogDen: .00035, rimCol: '#B8D0C4', rimK: 2 });
       const L = s.path;
       s.lamps.forEach((l, i) => {
-        const u = ((lt * .022 + .62 - i * .0135) % 1 + 1) % 1, k = smooth(seg(u, 0, .03)) * (1 - smooth(seg(u, .97, 1)));
-        l.position.copy(L.getPointAt(u)); setGlow(l, 1.8 * k * (.85 + .15 * noise(t * 3 + i)), 22 + 10 * hash(i));
+        const u = ((lt * .022 + .6 - i * .0098) % 1 + 1) % 1, k = smooth(seg(u, 0, .03)) * (1 - smooth(seg(u, .97, 1)));
+        l.position.copy(L.getPointAt(u)); setGlow(l, 1.8 * k * (.8 + .2 * noise(t * 4 + i * 3)), 20 + 10 * hash(i));
       });
-      cam(camera, [-420 + lt * 6, 160, 1500], [0, 420, MZ + 300], 34);
+      const k = ease(seg(lt, 0, 4.76));
+      cam(camera, [lerp(-420, -360, k), lerp(160, 178, k), lerp(1500, 1260, k)], [0, lerp(420, 470, k), MZ + 300], lerp(34, 31, k));
     },
   });
 

@@ -140,7 +140,7 @@
     frame(s, lt, dur, t, { camera, PX }) {
       sky({ ...ALIEN_NIGHT, time: t, skyYaw: 1.2 + t * .004, fogNear: 12, fogDen: .004 });
       const h = s.land.userData.height, y0 = h(0, 0);
-      s.f.position.set(0, y0, 0); s.f.userData.update(t, 1, PX);
+      s.f.position.set(0, y0, 0); s.f.userData.update(t, .62, PX);
       const [hx, hz] = [-7, -11];
       s.shelter.forEach((r, i) => { const a = i / 8 * PI * 2 + .2, bx = hx + Math.cos(a) * 2.2, bz = hz + Math.sin(a) * 2.2; setRod(r, [bx, h(bx, bz), bz], [hx + Math.cos(a) * .15, h(hx, hz) + 4.2, hz + Math.sin(a) * .15]); });
       [[1.3, -.6, -PI * .4], [-1.2, -.9, PI * .35], [.4, -1.5, PI * .05]].forEach(([x, z, yaw], i) => { P.at(s.ppl[i], [x, h(x, z), z], yaw); P.clip(s.ppl[i], 'Crouch_Idle_Loop', t + i); });
