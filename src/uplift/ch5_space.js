@@ -200,7 +200,7 @@
     },
     frame(s, lt, dur, t, { camera }) {
       sky({ zen: '#000105', hor: '#000105', stars: 1, milky: .5, skyYaw: 3.0, time: t });
-      const sun = v3([.3, .25, .92]).normalize(); s.e.userData.u.uSun.value.copy(sun); s.e.rotation.y = 2.2;
+      const sun = v3([.92, .28, .3]).normalize(); s.e.userData.u.uSun.value.copy(sun); s.e.rotation.y = 2.2;   // half day, half night: the cut from S23's night Earth does not jump
       // the ship moves +x (screen right) away from the Earth on the left, accelerating
       const go = 3 * lt + 9 * lt * lt, dir = v3([.78, .06, -.62]).normalize();
       const sp = v3([50, 51, 352]).addScaledVector(dir, go); s.ship.position.copy(sp); s.ship.lookAt(sp.clone().add(dir)); s.ship.rotateY(-PI / 2);

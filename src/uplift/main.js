@@ -122,7 +122,7 @@
       MIX.uniforms.uMix.value = w;
     } else MIX.uniforms.uMix.value = 0;
     setShot(S, t);
-    MIX.uniforms.uFlash.value.set(flashCol).multiplyScalar(flash * 2.2);   // a glare that blooms, not a blank white frame
+    MIX.uniforms.uFlash.value.set(flashCol).multiplyScalar(flash * 1.7);   // a glare that blooms, not a blank white frame
     FIN.uniforms.uFade.value = fade; FIN.uniforms.uFadeCol.value.copy(fadeCol);
     FIN.uniforms.uSeed.value = Math.floor(t * 24) % 97;
     composer.render();

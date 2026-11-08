@@ -326,7 +326,7 @@
   // ======================================================== S06 L4: settling, dawn
   // The hut goes up on its poles. The parent kneels, takes the child by the waist, stands and swings the child up
   // onto their shoulders: legs over the shoulders and held at the shins, hands on the parent's head. Then the sun.
-  SHOT({ id: 'S06', t0: LINE(4)[0], t1: LINE(5)[0], out: { kind: 'flash', d: 2.0, col: '#FFE2B0' },
+  SHOT({ id: 'S06', t0: LINE(4)[0], t1: LINE(5)[0], out: { kind: 'flash', d: 1.5, col: '#FFE2B0' },
     build(G) {
       const hf = (x, z) => z > -8 ? 0 : z > -42 ? -1.6 : -1.6 + (1 - Math.exp(-(-42 - z) / 30)) * 7 + Math.max(0, fbm2(x * .008, z * .008) + .3) * 16 * (1 - Math.exp(-(-42 - z) / 60));
       const land = terrain({ size: 2600, seg: 220, amp: .6, freq: .01, h: hf });
