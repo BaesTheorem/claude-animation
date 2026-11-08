@@ -1,8 +1,7 @@
 // uplift/ch5_space.js: verse 4 (S21-S25). The night Earth with the sunrise on its rim (the album cover), a light
 // sail unfurling, keys and a launch, radio rings around the world, the ship leaving, the crossing to a new world.
-// Earth textures: assets/tex/earth_lights_2048.png and earth_atmos_2048.jpg, from the three.js examples (no
-// recorded source or licence; swap in NASA's Black Marble before publishing, see assets/tex/README.md).
-// Units: the Earth's radius is 100.
+// Earth textures (NASA, public domain; see assets/tex/README.md): the 2016 Black Marble night lights (8192 px)
+// and the December 2004 Blue Marble Next Generation day image. Units: the Earth's radius is 100.
 (() => {
   const { THREE, kf, seg, smooth, ease, easeIn, easeOut, lerp, clamp, hash, noise, B, LINE, sky, silMat, litMat, glow, setGlow,
     box, cyl, sph, rod, setRod, cam, C, TOK, puffTex } = UP;
@@ -10,8 +9,8 @@
   const v3 = a => new THREE.Vector3(...a);
   const RE = 100;
   const TEX = {};
-  window.PRELOAD.push(loadTex('assets/tex/earth_lights_2048.png').then(t => { TEX.night = t; }));
-  window.PRELOAD.push(loadTex('assets/tex/earth_atmos_2048.jpg').then(t => { TEX.day = t; }));
+  window.PRELOAD.push(loadTex('assets/tex/BlackMarble_2016_8k.jpg').then(t => { TEX.night = t; }));
+  window.PRELOAD.push(loadTex('assets/tex/bluemarble_200412_5400.jpg').then(t => { TEX.day = t; }));
 
   // ---- the Earth: night lights, a lit crescent, faint moonlit land, radio rings; and an atmosphere shell
   const NR = 6;
@@ -28,15 +27,15 @@
           float ndl = dot(N, uSun);
           vec3 day = texture2D(tDay, vUv).rgb, night = texture2D(tNight, vUv).rgb;
           float lum = dot(night, vec3(.33));
-          vec3 lights = vec3(1., .74, .38) * pow(lum, 1.7) * uK;
+          vec3 lights = vec3(1., .74, .38) * pow(smoothstep(.2, .95, lum), 1.25) * uK;   // the city lights only, not the dim land
           vec3 c = day * smoothstep(.0, .45, ndl) * .9;
           c += lights * (1. - smoothstep(-.12, .06, ndl));
-          c += day * vec3(.45, .6, 1.) * uLand * (1. - smoothstep(-.2, .1, ndl));
+          c += day * vec3(.35, .5, 1.) * uLand * .45 * (1. - smoothstep(-.2, .1, ndl));
           float fr = pow(1. - max(dot(N, V), 0.), 2.6);
           float lit = smoothstep(-.35, .25, ndl);
-          c += mix(vec3(.18, .38, 1.), vec3(1., .55, .28), smoothstep(.05, -.25, ndl) * lit) * fr * (.25 + 1.8 * lit);
+          c += mix(vec3(.18, .38, 1.), vec3(1., .55, .28), smoothstep(.05, -.25, ndl) * lit) * pow(fr, 1.6) * (.12 + 1.6 * lit);
           for (int i = 0; i < ${NR}; i++) { if (uRingR[i] < 0.) continue; float a = acos(clamp(dot(N, uRingC[i]), -1., 1.));
-            c += vec3(.45, .8, 1.) * exp(-pow((a - uRingR[i]) / .011, 2.)) * uRingK * (1. - smoothstep(.45, 1.3, uRingR[i])) * 2.0; }
+            c += vec3(.4, .78, 1.) * exp(-pow((a - uRingR[i]) / .0065, 2.)) * uRingK * (1. - smoothstep(.45, 1.3, uRingR[i])) * .9; }
           gl_FragColor = vec4(c, 1.);
         }` });
     const body = new THREE.Mesh(new THREE.SphereGeometry(RE, 128, 64), m); g.add(body);
@@ -45,10 +44,10 @@
       fragmentShader: `uniform vec3 uSun; varying vec3 vN; varying vec3 vW;
         void main(){ vec3 N = normalize(vN), V = normalize(cameraPosition - vW); float f = pow(max(1. + dot(N, V) * 1.0, 0.), 1.0);
           float rim = pow(clamp(dot(-N, V), 0., 1.), 0.); float lit = smoothstep(-.4, .35, dot(N, uSun));
-          float edge = pow(1. - abs(dot(N, V)), 7.);
+          float edge = pow(1. - abs(dot(N, V)), 4.);
           vec3 c = mix(vec3(.15, .35, 1.), vec3(1., .62, .32), smoothstep(.1, -.3, dot(N, uSun)) * lit) * edge * (.15 + 2.2 * lit);
           gl_FragColor = vec4(c, 1.); }` });
-    const atmo = new THREE.Mesh(new THREE.SphereGeometry(RE * 1.035, 96, 48), am); g.add(atmo);
+    const atmo = new THREE.Mesh(new THREE.SphereGeometry(RE * 1.016, 96, 48), am); g.add(atmo);
     g.userData = { u, body };
     return g;
   }
@@ -82,7 +81,7 @@
     build(G) {
       const e = earth(); G.add(e);
       const flare = glow('#FFE4B8', 60, 0), streakS = glow('#FFD7A0', 1, 0); G.add(flare, streakS);
-      const sl = sail(1.2); G.add(sl);
+      const sl = sail(.8); G.add(sl);
       return { e, flare, streakS, sl };
     },
     frame(s, lt, dur, t, { camera }) {
@@ -98,7 +97,7 @@
       s.streakS.position.copy(lp); setGlow(s.streakS, .9 * rise); s.streakS.scale.set(160 * (.6 + .4 * rise), 2.2, 1);
       // the sail: in the foreground, lower right, unfurls (1.0-3.0) and catches the sun (3.4-4.6)
       const fwd = look.clone().sub(cp).normalize(), right = fwd.clone().cross(v3([0, 1, 0])).normalize(), up = right.clone().cross(fwd).normalize();
-      s.sl.position.copy(cp).addScaledVector(fwd, 9).addScaledVector(right, 2.6).addScaledVector(up, -1.2);
+      s.sl.position.copy(cp).addScaledVector(fwd, 9).addScaledVector(right, 3.0).addScaledVector(up, -1.6);
       s.sl.lookAt(cp); s.sl.rotateZ(.3 + lt * .05);
       const k = easeOut(seg(lt, 1.0, 3.0)), gl = smooth(seg(lt, 3.3, 3.9)) * (1 - .6 * smooth(seg(lt, 4.3, 5.1)));
       s.sl.userData.set(k, gl);
@@ -218,22 +217,39 @@
       const N = 1400, pos = new Float32Array(N * 6), g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       const st = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: C('#D8E4FF').multiplyScalar(1.6), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
       st.frustumCulled = false; G.add(st);
-      // the new world: violet and teal bands, a ring, two moons
-      const pm = new THREE.ShaderMaterial({ uniforms: { uSun: { value: v3([.6, .3, .74]).normalize() }, uT: { value: 0 } },
+      // the new world, lit from behind by its sun (a crescent, as the Earth in S21): violet and teal cloud bands, a
+      // terminator, an atmosphere rim; thin banded rings with gaps; two moons shaded by the same sun
+      const SUN = v3([.62, .32, -.72]).normalize();
+      const pm = new THREE.ShaderMaterial({ uniforms: { uSun: { value: SUN }, uT: { value: 0 } },
         vertexShader: 'varying vec3 vN; varying vec3 vP; varying vec3 vW; void main(){ vN = normalize(mat3(modelMatrix) * normal); vP = position; vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
         fragmentShader: UP.SKY_GLSL + `uniform vec3 uSun; uniform float uT; varying vec3 vN; varying vec3 vP; varying vec3 vW;
           void main(){ vec3 N = normalize(vN), V = normalize(cameraPosition - vW); vec3 p = normalize(vP);
-            float band = ufbm(vec3(p.y * 9., p.x * .8 + uT * .02, p.z * .8)); vec3 base = mix(vec3(.22, .12, .42), vec3(.1, .48, .52), smoothstep(.35, .65, band));
-            base = mix(base, vec3(.78, .72, .95), smoothstep(.62, .8, ufbm(p * 5. + 7.)) * .5);
-            float ndl = max(dot(N, uSun), 0.); vec3 c = base * (.04 + 1.1 * ndl);
-            c += vec3(.4, .7, 1.) * pow(1. - max(dot(N, V), 0.), 3.) * (.2 + 1.4 * ndl);
+            float lat = p.y, turb = ufbm(vec3(p.x * 3., p.y * 14., p.z * 3. + uT * .01)) - .5;
+            float band = sin((lat + turb * .08) * 26.) * .5 + .5;
+            vec3 base = mix(vec3(.16, .10, .30), vec3(.08, .36, .40), smoothstep(.3, .7, band));
+            base = mix(base, vec3(.62, .58, .78), smoothstep(.75, .95, ufbm(p * 6. + 3.)) * .35);
+            float ndl = dot(N, uSun), lit = smoothstep(-.08, .35, ndl);
+            vec3 c = base * (.012 + 1.05 * lit);
+            float fr = pow(1. - max(dot(N, V), 0.), 3.);
+            c += vec3(.45, .75, 1.) * fr * (.05 + 1.6 * smoothstep(-.3, .3, ndl));
             gl_FragColor = vec4(c, 1.); }` });
-      const planet = new THREE.Mesh(new THREE.SphereGeometry(30, 96, 48), pm); G.add(planet);
-      const rg = new THREE.RingGeometry(38, 62, 128, 1), rm = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide,
-        vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
-        fragmentShader: 'varying vec3 vP; void main(){ float r = length(vP.xy); float b = .5 + .5 * sin(r * 1.7) * sin(r * .43); float a = smoothstep(38., 41., r) * smoothstep(62., 58., r) * (.35 + .5 * b); gl_FragColor = vec4(vec3(.82, .78, .95) * 1.2, a * .8); }' });
-      const ring = new THREE.Mesh(rg, rm); ring.rotation.x = PI / 2 - .32; planet.add(ring);
-      const moons = [sph(4, new THREE.MeshBasicMaterial({ color: C('#9A8CB8') })), sph(2.4, new THREE.MeshBasicMaterial({ color: C('#7FB0B8') }))]; moons.forEach(m => G.add(m));
+      const planet = new THREE.Mesh(new THREE.SphereGeometry(30, 128, 64), pm); G.add(planet);
+      const rg = new THREE.RingGeometry(40, 60, 192, 1), rm = new THREE.ShaderMaterial({ uniforms: { uSun: { value: SUN } }, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+        vertexShader: 'varying vec3 vP; varying vec3 vW; void main(){ vP = position; vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+        fragmentShader: `uniform vec3 uSun; varying vec3 vP; varying vec3 vW;
+          float h(float x){ return fract(sin(x * 91.7) * 43758.5); }
+          void main(){ float r = length(vP.xy), u = (r - 40.) / 20.;
+            float fine = .55 + .45 * sin(r * 3.1 + h(floor(r * 2.)) * 6.) * sin(r * .9);
+            float gap = smoothstep(.0, .02, abs(u - .62) - .025) * smoothstep(.0, .01, abs(u - .18) - .01);
+            float a = smoothstep(0., .04, u) * smoothstep(1., .9, u) * fine * gap * .5;
+            float lit = .25 + .75 * max(dot(normalize(vW), uSun), 0.);
+            gl_FragColor = vec4(vec3(.8, .76, .9) * (.35 + .9 * lit), a); }` });
+      const ring = new THREE.Mesh(rg, rm); ring.rotation.x = PI / 2 - .28; planet.add(ring);
+      const moonMat = col => new THREE.ShaderMaterial({ uniforms: { uSun: { value: SUN }, uC: { value: C(col) } },
+        vertexShader: 'varying vec3 vN; varying vec3 vP; void main(){ vN = normalize(mat3(modelMatrix) * normal); vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+        fragmentShader: UP.SKY_GLSL + `uniform vec3 uSun, uC; varying vec3 vN; varying vec3 vP;
+          void main(){ float d = ufbm(normalize(vP) * 4.); vec3 c = uC * (.75 + .5 * d) * (.015 + 1.1 * smoothstep(-.05, .4, dot(normalize(vN), uSun))); gl_FragColor = vec4(c, 1.); }` });
+      const moons = [new THREE.Mesh(new THREE.SphereGeometry(4, 48, 24), moonMat('#A898C8')), new THREE.Mesh(new THREE.SphereGeometry(2.4, 40, 20), moonMat('#8FBAC0'))]; moons.forEach(m => G.add(m));
       const newSun = glow('#E8F2FF', 30, 0); G.add(newSun);
       return { st, pos, planet, pm, moons, newSun };
     },
@@ -248,8 +264,8 @@
       }
       s.st.geometry.attributes.position.needsUpdate = true; s.st.material.opacity = 1 - smooth(seg(lt, 2.0, 3.0));
       // the new system grows ahead; the camera falls toward the planet
-      const near = easeIn(seg(lt, 1.2, 5.13));
-      const pd = lerp(1400, 70, near);
+      const near = ease(seg(lt, .6, 5.13)) * .7 + easeIn(seg(lt, .6, 5.13)) * .3;
+      const pd = lerp(900, 64, near);
       s.planet.position.set(18, -6, -pd); s.pm.uniforms.uT.value = t;
       s.moons[0].position.set(18 + 90, 30, -pd - 60); s.moons[1].position.set(18 - 70, 18, -pd + 30);
       s.newSun.position.set(400, 260, -pd - 900); setGlow(s.newSun, 1.5 + 2.5 * smooth(seg(lt, .5, 2.2)), 60);

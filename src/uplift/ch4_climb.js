@@ -33,40 +33,126 @@
     return g;
   }
 
-  // ======================================================== S15 instrumental: up through the clouds
+  // ======================================================== S15 instrumental: up through the clouds, a century of flight
+  // The biplane climbs into the clouds and comes out of each cloud bank as the next age's aircraft: a 1930s twin-engine
+  // propeller airliner, a 1950s four-engine swept-wing jet, a modern twin-engine widebody. Each change happens on a beat,
+  // hidden inside a cloud bank; the chase camera falls back as the aircraft grow. The last one leaves contrails above
+  // the cloud sea with its navigation lights on. All aircraft face +x, nose forward, in metres from real proportions.
+  const SWAP = [102.44, 103.80, 105.14];             // beats in the loudest bars of the instrumental
+  const ERA_LEN = [7, 19.7, 46, 57], ERA_V = [44, 72, 120, 140];
+  function fus(g, m, x0, x1, r, nose, tail, tailUp = 0) {          // a fuselage along x with a nose and an upswept tail cone
+    const body = cyl(r, r, x1 - x0, m, 18); body.rotation.z = PI / 2; body.position.x = (x0 + x1) / 2; g.add(body);
+    const n = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 12, 0, TAU, 0, PI / 2), m); n.scale.set(1, nose / r, 1); n.rotation.z = -PI / 2; n.position.x = x1; g.add(n);
+    const tc = new THREE.Mesh(new THREE.CylinderGeometry(r * .18, r, tail, 16), m); tc.rotation.z = PI / 2 - tailUp; tc.position.set(x0 - tail / 2 * Math.cos(tailUp), tail / 2 * Math.sin(tailUp), 0); g.add(tc);
+  }
+  function wingPair(g, m, xLE, span, cRoot, cTip, sweep, th, y = 0, rake = 0) {   // a planform in x (chord) and z (span)
+    const h = span / 2, sh = new THREE.Shape();
+    sh.moveTo(0, 0); sh.lineTo(-sweep, h - rake); sh.lineTo(-sweep - rake * .9, h); sh.lineTo(-sweep - cTip, h); sh.lineTo(-cRoot, 0);
+    sh.lineTo(-sweep - cTip, -h); sh.lineTo(-sweep - rake * .9, -h); sh.lineTo(-sweep, -h + rake); sh.closePath();
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: th, bevelEnabled: false }); geo.rotateX(PI / 2); geo.translate(xLE, y + th / 2, 0); geo.computeVertexNormals();
+    const w = new THREE.Mesh(geo, m); g.add(w); return w;
+  }
+  function finV(g, m, x, h, c0, c1, sweep, th) {
+    const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(-sweep, h); sh.lineTo(-sweep - c1, h); sh.lineTo(-c0, 0); sh.closePath();
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: th, bevelEnabled: false }); geo.translate(x, 0, -th / 2); geo.computeVertexNormals(); g.add(new THREE.Mesh(geo, m));
+  }
+  function pod(g, m, x0, x1, r, y, z, prop = 0) {
+    const e = cyl(r * .9, r, x1 - x0, m, 14); e.rotation.z = PI / 2; e.position.set((x0 + x1) / 2, y, z); g.add(e);
+    if (prop) { const d = new THREE.Mesh(new THREE.CircleGeometry(prop, 28), silMat({ opacity: .28, side: THREE.DoubleSide })); d.rotation.y = PI / 2; d.position.set(x1 + .15, y, z); g.add(d); }
+  }
+  function dc3() {
+    const g = new THREE.Group(), m = silMat();
+    fus(g, m, -8.5, 7.5, 1.15, 1.6, 4.5, .12);
+    wingPair(g, m, 2.6, 29, 4.4, 1.6, 1.6, .45, -.8);
+    pod(g, m, -.6, 3.8, .78, -.55, 5.6, 1.75); pod(g, m, -.6, 3.8, .78, -.55, -5.6, 1.75);
+    wingPair(g, m, -10.6, 8.7, 2.4, 1.0, .8, .2, .35);
+    finV(g, m, -10.4, 3.4, 3.2, 1.3, 1.6, .25);
+    return g;
+  }
+  function jet707() {
+    const g = new THREE.Group(), m = silMat();
+    fus(g, m, -18, 17, 1.85, 4.5, 7.5, .1);
+    wingPair(g, m, 5, 44, 10, 2.6, 12.5, .7, -1.0);
+    for (const z of [-15.5, -9.3, 9.3, 15.5]) { const xo = 4.6 - Math.abs(z) * .55; pod(g, m, xo - 4.6, xo + .4, .85, -2.4, z); const py = box(2.2, 1.3, .2, m); py.position.set(xo - 1.6, -1.6, z); g.add(py); }
+    wingPair(g, m, -19, 14, 4.2, 1.5, 3.4, .25, .9);
+    finV(g, m, -19.5, 10, 6.5, 2.2, 7.5, .4);
+    return g;
+  }
+  function widebody() {
+    const g = new THREE.Group(), m = silMat();
+    fus(g, m, -22, 21, 2.9, 5.5, 9.5, .09);
+    const w = wingPair(g, m, 6.5, 60, 12.5, 2.3, 16, .9, -1.4, 3.2);
+    for (const z of [-10.8, 10.8]) { pod(g, m, -2.4, 6.0, 1.65, -3.0, z); const py = box(3.4, 1.8, .3, m); py.position.set(1.4, -2.0, z); g.add(py); }
+    wingPair(g, m, -24.5, 19.5, 6.0, 2.0, 5.5, .35, 1.0);
+    finV(g, m, -24, 12.5, 8.5, 3.0, 9, .5);
+    // navigation lights: port red, starboard green, white strobes at the tips and tail, a red beacon on top
+    const L = { red: glow('#FF3A2A', 2.2, 0), green: glow('#3AFF6A', 2.2, 0), s1: glow('#F0F4FF', 3, 0), s2: glow('#F0F4FF', 3, 0), tail: glow('#F0F4FF', 3, 0), bea: glow('#FF2A1A', 2.6, 0) };
+    L.red.position.set(-17.5, -1, -30); L.green.position.set(-17.5, -1, 30); L.s1.position.set(-18, -1, -30.3); L.s2.position.set(-18, -1, 30.3);
+    L.tail.position.set(-31, 1.6, 0); L.bea.position.set(-2, 3.2, 0);
+    Object.values(L).forEach(o => g.add(o)); g.userData.lights = L;
+    return g;
+  }
+  // the climb: speed eases between the ages; position is integrated in closed form steps (deterministic)
+  const GAMMA = .40, DIR = v3([Math.cos(GAMMA), Math.sin(GAMMA), -.28]).normalize();
+  const eraAt = t => SWAP.filter(x => t >= x).length;
+  const speedAt = t => { let v = ERA_V[0]; SWAP.forEach((x, i) => { v = lerp(v, ERA_V[i + 1], smooth(seg(t, x - .2, x + .6))); }); return v; };
+  const sAt = t => { const n = 80, a = T15 - .5, h = (t - a) / n; let s = 0; for (let i = 0; i < n; i++) s += speedAt(a + (i + .5) * h) * h; return s; };
+  const P0 = v3([0, 240, 0]);
+  const planeAt = t => P0.clone().addScaledVector(DIR, sAt(t));
+  const lenAt = t => { let L = ERA_LEN[0]; SWAP.forEach((x, i) => { L = lerp(L, ERA_LEN[i + 1], smooth(seg(t, x - .15, x + .35))); }); return L; };
   SHOT({ id: 'S15', t0: T15, t1: T16, out: { kind: 'cross', d: 1.0 },
     build(G) {
-      const plane = biplane(); G.add(plane);
-      const below = cloudSlab({ n: 30, box: [-200, 700, 250, 285, -220, 140], col: '#4A3448', op: .6, size: 90, seed: 1 });
-      const layer = cloudSlab({ n: 55, box: [-150, 500, 300, 336, -120, 90], col: '#7A5468', op: .55, size: 70, seed: 2 });
-      const tops = cloudSlab({ n: 110, box: [-100, 900, 390, 405, -400, 200], col: '#3A3050', op: .95, size: 170, seed: 3 });
-      // a sea of cloud tops below, lit toward the sunset
+      const planes = [biplane(), dc3(), jet707(), widebody()]; planes.forEach(pl => G.add(pl));
+      // a cloud bank around the aircraft at each change, so it flies into cloud and out as the next age
+      const banks = SWAP.map((ts, i) => { const c = planeAt(ts), L = ERA_LEN[i + 1];
+        return cloudSlab({ n: 12, box: [c.x - .5 * L, c.x + .6 * L, c.y - .35 * L, c.y + .35 * L, c.z - .5 * L, c.z + .5 * L], col: '#B07C84', op: .96, size: .75 * L + 8, seed: 11 + i }); });
+      banks.forEach(b => G.add(b));
+      const wisps = cloudSlab({ n: 18, box: [-100, 900, 330, 520, -400, -60], col: '#7A5468', op: .45, size: 70, seed: 2 }); G.add(wisps);
+      // the cloud sea below the final altitude, lit toward the sunset
+      const top = planeAt(SWAP[2]).y - 35;
       const seaM = new THREE.ShaderMaterial({ uniforms: { ...UP.U }, transparent: true, depthWrite: false,
         vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
         fragmentShader: UP.SKY_GLSL + `varying vec3 vW;
-          void main(){ vec2 p = vW.xz * .006; float n = ufbm(vec3(p, uTime * .01)), n2 = ufbm(vec3(p * 3.1 + 4., 1.));
+          void main(){ vec2 p = vW.xz * .004; float n = ufbm(vec3(p, uTime * .01)), n2 = ufbm(vec3(p * 3.1 + 4., 1.));
             float cov = smoothstep(.36, .62, n * .8 + n2 * .35);
             vec3 v = normalize(vW - cameraPosition); float toward = pow(max(dot(normalize(vec3(v.x, 0., v.z)), normalize(vec3(uSunDir.x, 0., uSunDir.z))), 0.), 3.);
             vec3 lit = mix(vec3(.08, .06, .15), vec3(.62, .3, .2), toward * (.35 + .65 * n2));
             vec3 c = mix(skyBase(v) * .7, lit, cov);
-            float dd = length(vW - cameraPosition); c = mix(c, skyBase(v), clamp(1. - exp(-dd * .00035), 0., .85));
+            float dd = length(vW - cameraPosition); c = mix(c, skyBase(v), clamp(1. - exp(-dd * .00025), 0., .85));
             gl_FragColor = vec4(c, smoothstep(.0, .2, cov) * .97); }` });
-      const sea = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000, 1, 1), seaM); sea.rotation.x = -PI / 2; sea.position.y = 338; G.add(sea);
-      G.add(below, layer, tops);
-      return { plane, layer, tops, sea };
+      const sea = new THREE.Mesh(new THREE.PlaneGeometry(30000, 30000, 1, 1), seaM); sea.rotation.x = -PI / 2; sea.position.y = top; G.add(sea);
+      // contrails: soft additive puffs along the widebody's own past path, behind its two engines
+      const trail = []; for (let i = 0; i < 2 * 150; i++) { const g = glow('#FFE2D0', 4, 0); trail.push(g); G.add(g); }
+      return { planes, trail };
     },
     frame(s, lt, dur, t, { camera }) {
-      const k = smooth(seg(lt, 2.4, 5.0));
+      const k = smooth(seg(lt, 1.4, 5.0));
       const DUSK = { zen: '#1E1C40', hor: '#C46A3E', horK: .35, halo: '#E07040', haloW: 3, haloH: .07, sunDir: [1, -.05, -.25], sunCol: '#FFB070', sunGlow: .8, stars: .1 };
       const NIGHT = { zen: '#05081A', hor: '#3A2C4E', horK: .45, halo: '#9A4A3A', haloW: 4, haloH: .035, sunDir: [1, -.1, -.25], sunGlow: .2, stars: .9, milky: .4 };
-      sky({ ...skyMix(DUSK, NIGHT, k), time: t, fogNear: 400, fogDen: .0004 });
-      const ang = lerp(.42, .12, smooth(seg(lt, 3.6, 5.3))), sp = 46;
-      const x = sp * lt * Math.cos(.38), y = 262 + sp * lt * Math.sin(.38) * lerp(1, .85, smooth(seg(lt, 3.6, 5.3)));
-      s.plane.position.set(x, y, 0); s.plane.rotation.set(0, 0, ang); s.plane.children[s.plane.children.length - 5].rotation.x = t * 40;
-      // camera: below and behind, looking up at the plane; rises with it through the layer
-      s.tops.visible = false;
-      const off = v3([lerp(-26, -34, k), lerp(-12, 9, k), lerp(14, 12, k)]);
-      cam(camera, [x + off.x, y + off.y, off.z], [x + 8, y + lerp(4, -4, k), lerp(0, -6, k)], lerp(40, 50, k));
+      sky({ ...skyMix(DUSK, NIGHT, k), time: t, fogNear: 400, fogDen: .00025, rimK: 3, rimCol: '#FFB080' });
+      const era = eraAt(t), pos = planeAt(t), L = lenAt(t);
+      s.planes.forEach((pl, i) => {
+        pl.visible = i === era;
+        if (!pl.visible) return;
+        pl.position.copy(pos); pl.rotation.set(0, Math.atan2(-DIR.z, DIR.x) * .0 + .28, GAMMA * (i < 2 ? 1 : .85));
+        pl.rotation.order = 'YXZ'; pl.rotation.x = -.06 + .04 * Math.sin(t * 1.3 + i);    // a slight bank that breathes
+        pl.children.forEach(c => { if (c.geometry && c.geometry.type === 'CircleGeometry') c.rotation.x = t * 40; });
+      });
+      // the widebody's lights blink (strobes twice a second, beacon once a second); contrails behind its engines
+      const wb = s.planes[3], Lt = wb.userData.lights, on = era === 3;
+      const strobe = (Math.floor(t * 2) % 2 === 0 && (t * 2 % 1) < .12) ? 3 : 0, beacon = ((t * 1.1) % 1) < .18 ? 2.6 : .2;
+      setGlow(Lt.red, on ? 2.2 : 0); setGlow(Lt.green, on ? 2.2 : 0); setGlow(Lt.s1, on ? strobe : 0); setGlow(Lt.s2, on ? strobe : 0); setGlow(Lt.tail, on ? strobe : 0); setGlow(Lt.bea, on ? beacon : 0);
+      s.trail.forEach((g, i) => {
+        const e = i % 2, j = Math.floor(i / 2), tau = .03 + j * .013, past = planeAt(t - tau);
+        const off = v3([-2, -3, e ? 10.8 : -10.8]).applyEuler(wb.rotation);
+        g.position.copy(past).add(off);
+        const age = Math.max(0, t - SWAP[2] - .25 - tau), vis = on && age > 0 ? Math.min(1, age * 3) : 0;
+        setGlow(g, vis * .2 * Math.pow(1 - j / 150, 1.4), 3.6 + j * .1);
+      });
+      // chase camera: behind, below and to the side; it falls back as the aircraft grow
+      const D = 1.55 * L + 6, look = pos.clone().addScaledVector(DIR, .1 * L);
+      const cp = pos.clone().addScaledVector(DIR, -.55 * D).add(v3([.1 * D, -.55 * D * (1 - .6 * k), 1.05 * D]));
+      cam(camera, cp.toArray(), look.toArray(), lerp(42, 48, k));
     },
   });
 
@@ -79,12 +165,12 @@
         for (let i = 0; i < p.count; i++) p.setY(i, curve(p.getX(i), p.getZ(i))); return g; })(), silMat({ col: '#06070C', fog: .3 }));
       G.add(ground);
       // cities: centres with sizes and founding order; roads between neighbours
-      const NC = 110, cities = [];
-      for (let i = 0; i < NC; i++) cities.push({ x: (hash(i * 1.3) - .5) * 700, z: -hash(i * 2.1) * 620 + 60, r: 2.5 + Math.pow(hash(i * 3.7), 3) * 16, o: hash(i * 5.9) });
+      const NC = 170, cities = [];
+      for (let i = 0; i < NC; i++) cities.push({ x: (hash(i * 1.3) - .5) * 640, z: 70 - Math.pow(hash(i * 2.1), 1.5) * 640, r: 2 + Math.pow(hash(i * 3.7), 3) * 15, o: hash(i * 5.9) });
       const pos = [], on = [], col = [];
       const add = (x, z, t0, warm) => { pos.push(x, curve(x, z) + .02, z); on.push(t0); col.push(warm); };
       cities.forEach((c, i) => {
-        const n = Math.round(c.r * c.r * 9 + 40);
+        const n = Math.round(c.r * c.r * 14 + 60);
         for (let j = 0; j < n; j++) {
           const a = hash(i * 31 + j * 1.1) * TAU, d = Math.pow(hash(i * 17 + j * 2.3), 1.6) * c.r;
           add(c.x + Math.cos(a) * d, c.z + Math.sin(a) * d, c.o * 3.2 + d / c.r * 2.2 + hash(j) * .5, hash(j * 3.3) < .8 ? 1 : 0);
@@ -93,7 +179,7 @@
       for (let i = 0; i < NC; i++) {
         const a = cities[i]; let best = -1, bd = 1e9;
         for (let j = 0; j < NC; j++) { if (j === i) continue; const d = Math.hypot(a.x - cities[j].x, a.z - cities[j].z); if (d < bd) { bd = d; best = j; } }
-        const b2 = cities[best], n = Math.round(bd / .7);
+        const b2 = cities[best], n = Math.round(bd / .45);
         for (let k = 0; k < n; k++) { const u = k / n; add(lerp(a.x, b2.x, u) + noise(u * 6 + i) * 6, lerp(a.z, b2.z, u) + noise(u * 5 + i * 2) * 6, 3.4 + Math.max(a.o, b2.o) * 2 + u * 1.2 + hash(k * 1.9 + i), 1); }
       }
       const g = new THREE.BufferGeometry();
@@ -109,7 +195,7 @@
       return { lights, storm, bolts };
     },
     frame(s, lt, dur, t, { camera, PX }) {
-      sky({ zen: '#02030A', hor: '#0C1328', horK: .55, halo: '#142044', haloW: 1.5, haloH: .03, sunDir: [0, -.2, -1], stars: 1, milky: .6, skyYaw: .8 + t * .01, time: t, fogNear: 40, fogDen: .0015, fogMax: .8 });
+      sky({ zen: '#02030A', hor: '#0C1328', horK: .55, halo: '#1C4A3C', haloW: 0, haloH: .018, sunDir: [0, -.2, -1], stars: 1, milky: .6, skyYaw: .8 + t * .01, time: t, fogNear: 40, fogDen: .0015, fogMax: .8 });
       s.lights.material.uniforms.uT.value = lt * 1.15; s.lights.material.uniforms.uPx.value = PX;
       const st = smooth(seg(lt, 5.0, 7.4));
       s.lights.material.uniforms.uDim.value = 1 - .8 * st;
@@ -128,7 +214,7 @@
       const land = terrain({ size: 2000, seg: 160, amp: .5, freq: .02, fog: .45, h: (x, z) => .25 * fbm2(x * .2, z * .2) + 30 * Math.max(0, -z - 300) / 700 });
       G.add(land, water({ w: 2000, d: 2000, y: .02, dark: .5 }));
       G.add(grass({ area: [-30, 30, -40, 4], n: 6000, h: 1.2, ground: land.userData.height, clear: [[0, -3.5, 3.2], [-1.5, 3.8, 2.5]] }));
-      const p = P.make('m1'); G.add(p.root);
+      const p = P.make('m1', { outfit: ['tunic', 'hood'] }); G.add(p.root);
       const rain = streak({ n: 2500, box: [30, 16, 30], dir: [1.5, -14, 0], size: 40, max: 4, col: '#9AA8C0' }); rain.position.set(0, 6, -4); G.add(rain);
       return { land, p, rain };
     },
@@ -192,7 +278,7 @@
       for (let i = 0; i < 7; i++) { const x = -30 - hash(i) * 50, z = -30 - hash(i * 4) * 50, g = glow('#FFB060', 30 + 20 * hash(i), .45); g.position.set(x, hf(x, z) + 5, z); valley.add(g); }
       for (let i = 0; i < 14; i++) { const u = i / 13, x = lerp(-1.5, -30, u), z = lerp(-1, -24, u * u), g = glow('#FFC070', .7, 1.5); g.position.set(x, hf(x, z) + .8, z); valley.add(g); }
       G.add(valley);
-      const p = P.make('m3'); G.add(p.root);
+      const p = P.make('m3', { outfit: ['cloak', 'hood', 'pack'] }); G.add(p.root);
       const lamp = glow(TOK.ember, .7, 1.7); G.add(lamp);
       const snow = streak({ n: 1600, box: [26, 14, 20], dir: [-9, -1.5, 1], size: 50, max: 6, col: '#C8D4EA' }); snow.position.set(10, 7, -2); G.add(snow);
       return { land, p, lamp, snow };
@@ -218,7 +304,7 @@
       const hf = (x, z) => x < 0 ? Math.max(-6, 1.1 * x) : -.1 * x + .4 * fbm2(x * .3, z * .3);   // a ledge at x = 0, the summit to the right
       const land = terrain({ size: 6000, seg: 260, amp: .4, freq: .05, fog: .5, h: (x, z) => hf(x, z) - 1400 * (1 - Math.exp(-Math.max(0, Math.hypot(x, z) - 40) / 900)) });
       G.add(land);
-      const p = P.make('m3'); G.add(p.root);
+      const p = P.make('m3', { outfit: ['cloak', 'hood', 'pack'] }); G.add(p.root);
       return { land, p };
     },
     frame(s, lt, dur, t, { camera }) {

@@ -73,17 +73,24 @@ window.UP = (() => {
     expo: 1,
     fogNear: 8, fogDen: .004, fogMax: .97, fogK: 1,                    // silhouette fade toward the sky behind it
     wind: .5, time: 0,
+    // rim light on silhouettes: a directional key (default: from the sun, in the halo colour) and a point light
+    rimDir: null, rimCol: null, rimK: 2.4, rimP: 5.5,
+    ptPos: [0, -9999, 0], ptCol: '#FF8A3D', ptK: 0, ptR: 2.5,
   };
   const U = {};
-  const toU = (k, v) => (typeof v === 'string') ? C(v) : Array.isArray(v) ? new THREE.Vector3(...v).normalize() : v;
+  const isPos = k => k.endsWith('Pos');                                // positions are not normalized
+  const toU = (k, v) => v === null ? (k === 'rimDir' ? new THREE.Vector3(0, 0, -1) : C('#000000')) : (typeof v === 'string') ? C(v) : Array.isArray(v) ? (isPos(k) ? new THREE.Vector3(...v) : new THREE.Vector3(...v).normalize()) : v;
   for (const [k, v] of Object.entries(SKY_DEFAULTS)) U['u' + k[0].toUpperCase() + k.slice(1)] = { value: toU(k, v) };
   const cur = { ...SKY_DEFAULTS };
   function sky(o) {
     Object.assign(cur, SKY_DEFAULTS, o);
+    // the default rim comes from the sky itself: the sun's direction (kept at or above the horizon) and the halo colour
+    if (!cur.rimDir) { const s = cur.sunDir; cur.rimDir = [s[0], Math.max(s[1], .03), s[2]]; }
+    if (!cur.rimCol) cur.rimCol = hexMix(cur.halo, cur.sunCol, .3);
     for (const [k, v] of Object.entries(cur)) {
       const u = U['u' + k[0].toUpperCase() + k.slice(1)]; if (!u) continue;
       if (typeof v === 'string') u.value.set(v);
-      else if (Array.isArray(v)) u.value.set(...v).normalize();
+      else if (Array.isArray(v)) { u.value.set(...v); if (!isPos(k)) u.value.normalize(); }
       else u.value = v;
     }
     starMat.uniforms.uK.value = cur.stars; starMat.uniforms.uTime.value = cur.time; starMat.uniforms.uYaw.value = cur.skyYaw;
@@ -101,6 +108,7 @@ window.UP = (() => {
     uniform vec3 uZen, uHor, uGnd, uSunDir, uSunCol, uHalo, uMoon1Dir, uMoon1Col, uMoon2Dir, uMoon2Col, uCloudCol, uCloudLit;
     uniform float uHorK, uSunSize, uSunGlow, uHaloW, uHaloH, uMilky, uSkyYaw, uMoon1Size, uMoon1Phase, uMoon2Size, uMoon2Phase;
     uniform float uCloud, uCloudScale, uCloudDrift, uExpo, uFogNear, uFogDen, uFogMax, uFogK, uTime, uWind;
+    uniform vec3 uRimDir, uRimCol, uPtPos, uPtCol; uniform float uRimK, uRimP, uPtK, uPtR;
     float uh31(vec3 p){ p = fract(p * .1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
     float un3(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
       return mix(mix(mix(uh31(i), uh31(i + vec3(1,0,0)), f.x), mix(uh31(i + vec3(0,1,0)), uh31(i + vec3(1,1,0)), f.x), f.y),
@@ -114,7 +122,7 @@ window.UP = (() => {
       vec2 dz = normalize(d.xz + 1e-5), sz = normalize(s.xz + 1e-5);
       float az = max(dot(dz, sz), 0.);
       float band = exp(-abs(h - max(s.y, -.05) * .4) / max(uHaloH, 1e-3));
-      c += uHalo * pow(az, uHaloW) * band;
+      c += uHalo * (uHaloW > 0. ? pow(max(az, 1e-5), uHaloW) : 1.) * band;   // pow(0, 0) is undefined in GLSL: a NaN blacks out the frame through bloom
       float cs = max(dot(d, s), 0.);
       c += uSunCol * (pow(cs, 6.) * .10 + pow(cs, 60.) * .35 + pow(cs, 600.) * .8) * uSunGlow;
       return c * uExpo;
@@ -199,10 +207,26 @@ window.UP = (() => {
   // ---------------------------------------------------------------- materials
   const VERT_WPOS = `#include <skinning_vertex>
     vec4 uwp = vec4(transformed, 1.0);
+    #if !defined( USE_ENVMAP ) && !defined( USE_SKINNING )
+      vec3 objectNormal = vec3( normal );
+    #endif
+    vec3 uwn = objectNormal;
     #ifdef USE_INSTANCING
       uwp = instanceMatrix * uwp;
+      uwn = mat3( instanceMatrix ) * uwn;
     #endif
-    vWPos = (modelMatrix * uwp).xyz;`;
+    vWPos = (modelMatrix * uwp).xyz;
+    vWN = mat3( modelMatrix ) * uwn;`;
+  // rim: a thin edge where the surface turns away from the camera toward the key light; the point light (a fire)
+  // also lights the near side. A missing normal falls back to up, so no NaN can reach the bloom.
+  const RIM_FRAG = (scale) => `{ vec3 N = vWN; float nl = length(N); N = nl > 1e-4 ? N / nl : vec3(0., 1., 0.);
+      vec3 V = normalize(cameraPosition - vWPos); if (dot(N, V) < 0.) N = -N;
+      float edge = 1. - clamp(dot(N, V), 0., 1.);
+      float rd = pow(edge, uRimP) * max(dot(N, uRimDir), 0.) * uRimK;
+      vec3 Lp = uPtPos - vWPos; float dp = max(length(Lp), 1e-3); Lp /= dp;
+      float att = uPtK / (1. + dp * dp / (uPtR * uPtR));
+      float rp = pow(edge, 2.6) * max(dot(N, Lp), 0.) * att;
+      gl_FragColor.rgb += (uRimCol * rd + uPtCol * rp) * ${scale}; }`;
   const FOG_FRAG = (scale) => `{ vec3 dv = vWPos - cameraPosition; float dd = length(dv); vec3 vd = dv / max(dd, 1e-4);
       float ff = 1.0 - exp(-max(dd - uFogNear, 0.0) * uFogDen);
       gl_FragColor.rgb = mix(gl_FragColor.rgb, skyBase(vd) * uFogK, clamp(ff * ${scale}, 0.0, uFogMax)); }`;
@@ -214,7 +238,7 @@ window.UP = (() => {
     if (o.k) m.color.multiplyScalar(o.k);
     m.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, U);
-      let v = 'varying vec3 vWPos;\nuniform float uTime, uWind;\n' + sh.vertexShader.replace('#include <skinning_vertex>', VERT_WPOS);
+      let v = 'varying vec3 vWPos;\nvarying vec3 vWN;\nuniform float uTime, uWind;\n' + sh.vertexShader.replace('#include <skinning_vertex>', VERT_WPOS);
       if (o.sway) v = v.replace('#include <begin_vertex>', `#include <begin_vertex>
         { vec3 ip = vec3(0.);
           #ifdef USE_INSTANCING
@@ -224,7 +248,8 @@ window.UP = (() => {
           float sw = sin(uTime * 1.7 + ip.x * .35 + ip.z * .21) * .6 + sin(uTime * 3.1 + ip.z * .55) * .3 + sin(uTime * .6 + ip.x * .05) * .5;
           transformed.x += sw * uWind * hy * hy * ${(o.sway * 1).toFixed(3)}; }`);
       sh.vertexShader = v;
-      sh.fragmentShader = 'varying vec3 vWPos;\n' + SKY_GLSL + sh.fragmentShader.replace('#include <fog_fragment>', FOG_FRAG((o.fog ?? 1).toFixed(3)));
+      sh.fragmentShader = 'varying vec3 vWPos;\nvarying vec3 vWN;\n' + SKY_GLSL + sh.fragmentShader.replace('#include <fog_fragment>',
+        (o.k ? '' : RIM_FRAG((o.rim ?? 1).toFixed(3))) + FOG_FRAG((o.fog ?? 1).toFixed(3)));
     };
     m.customProgramCacheKey = () => 'sil' + key;
     return (matCache[key] = m);
@@ -310,6 +335,10 @@ window.UP = (() => {
       const kk = Math.min(1, k), ks = Math.pow(kk, 1.4);
       setGlow(halo, 1.0 * kk * fl, (.8 + 5.2 * ks) * sc); setGlow(core, 2.6 * kk * fl, (.25 + 1.5 * ks) * sc);
       pool.material.color.set(TOK.ember).multiplyScalar(.55 * kk * fl * (o.pool ?? 1)); pool.scale.setScalar((2 + 9 * ks) * sc);
+      if (o.light !== false && g.visible) {          // this fire is the scene's point light (it rims nearby figures)
+        U.uPtPos.value.set(g.position.x, g.position.y + .45 * sc, g.position.z); U.uPtCol.value.set(TOK.ember);
+        U.uPtK.value = 1.6 * kk * fl * (o.light ?? 1); U.uPtR.value = (1.0 + 2.0 * ks) * sc;
+      }
       flames.forEach((s, i) => {
         const ph = hash(i + seed * 10), h = (.45 + .75 * ph) * ks * sc * (.75 + .35 * noise(t * (5 + ph * 4) + i * 3)) * (i >= Math.ceil(NF * (.3 + .7 * kk)) ? 0 : 1);
         s.position.set((ph - .5) * .26 * sc * Math.sqrt(kk), 0, (hash(i * 3 + seed) - .5) * .22 * sc);
@@ -359,8 +388,8 @@ window.UP = (() => {
       let y = fbm2(x * fr + seed, z * fr - seed) * amp + (o.h ? o.h(x, z) : 0);
       p.setY(i, y + (o.y ?? 0));
     }
-    g.translate(o.cx ?? 0, 0, o.cz ?? 0);
-    const m = new THREE.Mesh(g, silMat(o.mat || { fog: o.fog ?? .55 })); m.userData.height = (x, z) => fbm2(x * fr + seed, z * fr - seed) * amp + (o.h ? o.h(x, z) : 0) + (o.y ?? 0);
+    g.translate(o.cx ?? 0, 0, o.cz ?? 0); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, silMat(o.mat || { fog: o.fog ?? .55, rim: o.rim ?? .45 })); m.userData.height = (x, z) => fbm2(x * fr + seed, z * fr - seed) * amp + (o.h ? o.h(x, z) : 0) + (o.y ?? 0);
     return m;
   }
   // a far silhouette ridge: a vertical card whose top edge is noise. o: z (distance, negative = ahead), w, h, rough, seed, x
@@ -381,8 +410,8 @@ window.UP = (() => {
   function grass(o = {}) {
     const [x0, x1, z0, z1] = o.area ?? [-20, 20, -10, 5], n = o.n ?? 3000, h = o.h ?? .7, clear = o.clear ?? [];
     const bg = new THREE.BufferGeometry();
-    bg.setAttribute('position', new THREE.Float32BufferAttribute([-.012, 0, 0, .012, 0, 0, 0, 1, 0], 3));
-    const im = new THREE.InstancedMesh(bg, silMat({ sway: o.sway ?? .35, side: THREE.DoubleSide }), n);
+    bg.setAttribute('position', new THREE.Float32BufferAttribute([-.012, 0, 0, .012, 0, 0, 0, 1, 0], 3)); bg.computeVertexNormals();
+    const im = new THREE.InstancedMesh(bg, silMat({ sway: o.sway ?? .35, side: THREE.DoubleSide, rim: o.rim ?? .7 }), n);
     const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler();
     for (let i = 0; i < n; i++) {
       const x = lerp(x0, x1, hash(i * 1.31 + 7)), z = lerp(z0, z1, hash(i * 2.17 + 3));
@@ -437,6 +466,12 @@ window.UP = (() => {
   const cyl = (r0, r1, h, m, n = 12) => new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, n), m || silMat());
   const cone = (r, h, m, n = 12) => new THREE.Mesh(new THREE.ConeGeometry(r, h, n), m || silMat());
   const sph = (r, m, n = 16) => new THREE.Mesh(new THREE.SphereGeometry(r, n, Math.max(6, n >> 1)), m || silMat());
+  // an irregular low-poly rock (r = size), squashed by sy
+  function rock(r = .4, seed = 1, sy = .7, m) {
+    const g = new THREE.IcosahedronGeometry(r, 1), p = g.attributes.position, v = new THREE.Vector3();
+    for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const k = 1 + (fbm(v.x * 3.1 + seed) * .5 + noise(v.z * 4.3 + v.y * 2.1 + seed * 3) * .25); p.setXYZ(i, v.x * k, v.y * k * sy, v.z * k); }
+    g.computeVertexNormals(); return new THREE.Mesh(g, m || silMat());
+  }
   // a rod between two points (spears, poles, ropes, rails)
   function rod(r = .02, m) { const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1, 6), m || silMat()); c.userData.rod = true; return c; }
   const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _q = new THREE.Quaternion();
@@ -463,7 +498,7 @@ window.UP = (() => {
     const h = land.userData.height, [x, dy, z] = pos;
     cam(camera, [x, h(x, z) + dy, z], look, fov, roll);
   }
-  return { gcam, THREE, T, TAU, clamp, lerp, seg, smooth, ease, easeOut, easeIn, kf, mixv, hash, noise, fbm, n2, fbm2, beatAt, pulse, LINE, B,
+  return { rock, gcam, THREE, T, TAU, clamp, lerp, seg, smooth, ease, easeOut, easeIn, kf, mixv, hash, noise, fbm, n2, fbm2, beatAt, pulse, LINE, B,
     C, TOK, hexMix, sky, skyMix, SKY_DEFAULTS, U, skyGroup, placeSky, SKY_GLSL, silMat, litMat, waterMat, glow, setGlow, fire, sparks,
     terrain, ridge, grass, water, streak, smoke, box, cyl, cone, sph, rod, setRod, gear, cam, glowTex, flameTex, puffTex };
 })();

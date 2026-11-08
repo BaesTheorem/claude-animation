@@ -9,8 +9,10 @@
   const THREE = window.THREE, T = window.TIMING;
   const Q = new URLSearchParams(location.search), DBG = k => Q.get(k);
   const W = +(DBG('w') || 1280), H = Math.round(W * 9 / 16), PX = H / 1080;
-  window.DUR = T.DUR;
-  window.PROJECT = { audio: 'assets/uplift.wav' };
+  // ?final=1 adds the credit card after the song (and the padded audio); ?mb=4 renders 4 sub-frames per frame
+  const FINAL = !!DBG('final'), CARD = 5.0, MB = +(DBG('mb') || 1), SHUTTER = +(DBG('shutter') || 1 / 48);
+  window.DUR = FINAL ? T.DUR + CARD : T.DUR;
+  window.PROJECT = { audio: FINAL ? 'assets/uplift_final.wav' : 'assets/uplift.wav' };
   const SH = (window.SHOTS || []).slice().sort((a, b) => a.t0 - b.t0);
 
   const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
@@ -45,7 +47,7 @@
       float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + uSeed) * 43758.5453); }
       void main(){
         vec2 d = vUv - .5; float r2 = dot(d, d);
-        vec2 off = d * r2 * .012;
+        vec2 off = d * r2 * .0045;                               // a faint lens fringe at the edges
         vec3 c = vec3(texture2D(tDiffuse, vUv + off).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - off).b);
         vec2 q = d; q.x *= uRes.x / uRes.y;
         c *= 1. - .32 * smoothstep(.25, .95, length(q));          // vignette
@@ -76,7 +78,22 @@
     UP.placeSky(camera, PX);
   }
   const BLACK = new THREE.Color(0, 0, 0);
+  // the credit card after the song: the film's last star, then the credits (the song, its writer and singer)
+  function card(t) {
+    const k = t - T.DUR, a = Math.min(1, Math.max(0, (k - .5) / 1.0)) * Math.min(1, Math.max(0, (CARD - k - .2) / 1.0));
+    out2d.fillStyle = '#05060B'; out2d.fillRect(0, 0, W, H);
+    const u = H / 1080, cx = W / 2;
+    const g = out2d.createRadialGradient(cx, H * .3, 0, cx, H * .3, 26 * u); g.addColorStop(0, `rgba(255,214,140,${.95 * a})`); g.addColorStop(.25, `rgba(255,196,107,${.35 * a})`); g.addColorStop(1, 'rgba(255,196,107,0)');
+    out2d.fillStyle = g; out2d.fillRect(cx - 30 * u, H * .3 - 30 * u, 60 * u, 60 * u);
+    out2d.textAlign = 'center'; out2d.textBaseline = 'alphabetic';
+    const line = (txt, y, px, alpha, style = '') => { out2d.font = `${style} ${Math.round(px * u)}px Baskerville, "Baskerville Old Face", Georgia, serif`; out2d.fillStyle = `rgba(232,226,214,${alpha})`; out2d.fillText(txt, cx, y * u); };
+    line('Uplift', 480, 72, a * .95);
+    line('written by Andrew Eigel', 570, 34, a * .8, 'italic');
+    line('performed by Glen Raphael', 618, 34, a * .8, 'italic');
+    line('from Brighter Than Today: A Secular Solstice (Raymond Arnold, 2014)', 700, 24, a * .55);
+  }
   function frame(t) {
+    if (FINAL && t >= T.DUR) { card(t); return; }
     const only = DBG('only'), i = only ? SH.findIndex(s => s.id === only) : idx(t), S = SH[i], P = SH[i - 1], N = SH[i + 1];
     let other = null, w = 0, fade = 0, fadeCol = BLACK, flash = 0, flashCol = '#FFD9A0';
     const sm = UP.smooth;
@@ -109,7 +126,7 @@
     FIN.uniforms.uFade.value = fade; FIN.uniforms.uFadeCol.value.copy(fadeCol);
     FIN.uniforms.uSeed.value = Math.floor(t * 24) % 97;
     composer.render();
-    const label = DBG('label');
+    const label = DBG('label') && MB <= 1;
     out2d.drawImage(canvas, 0, 0);
     if (label) {
       const mm = Math.floor(t / 60), ss = (t - mm * 60).toFixed(2).padStart(5, '0');
@@ -117,7 +134,28 @@
       out2d.fillStyle = 'rgba(255,255,255,.55)'; out2d.fillText(`${S.id}  ${mm}:${ss}`, Math.round(16 * W / 1280), H - Math.round(16 * W / 1280));
     }
   }
-  window.renderAt = async (t, type = 'image/png', q = .92) => { frame(t); return view.toDataURL(type, q); };
+  // motion blur: average MB sub-frames across a 180-degree shutter, clamped to the current shot so a hard cut never
+  // blends two shots (dissolves blend anyway). The label is drawn once, on top.
+  const acc = document.createElement('canvas'); acc.width = W; acc.height = H; const acc2d = acc.getContext('2d');
+  function frameMB(t) {
+    if (MB <= 1 || (FINAL && t >= T.DUR)) { frame(t); return; }
+    const S = SH[idx(t)], lab = DBG('label');
+    for (let k = 0; k < MB; k++) {
+      let ts = t + ((k + .5) / MB - .5) * SHUTTER;
+      if (!(S.out && S.out.kind !== 'cut')) ts = Math.min(ts, S.t1 - 1e-4);
+      const P = SH[idx(t) - 1]; if (!(P && P.out && P.out.kind !== 'cut')) ts = Math.max(ts, S.t0);
+      frame(Math.max(0, ts));
+      acc2d.globalAlpha = 1 / (k + 1); acc2d.drawImage(view, 0, 0);
+    }
+    acc2d.globalAlpha = 1; out2d.drawImage(acc, 0, 0);
+    if (lab) label(t);
+  }
+  function label(t) {
+    const S = SH[idx(t)], mm = Math.floor(t / 60), ss = (t - mm * 60).toFixed(2).padStart(5, '0');
+    out2d.font = `${Math.round(18 * W / 1280)}px ui-monospace, Menlo, monospace`;
+    out2d.fillStyle = 'rgba(255,255,255,.55)'; out2d.fillText(`${S.id}  ${mm}:${ss}`, Math.round(16 * W / 1280), H - Math.round(16 * W / 1280));
+  }
+  window.renderAt = async (t, type = 'image/png', q = .92) => { frameMB(t); return view.toDataURL(type, q); };
   window.renderSheet = async (times, cols = 3, w = 640, crop = null) => {
     const [cx, cy, cw, chh] = crop || [0, 0, W, H], h = Math.round(w * chh / cw), rows = Math.ceil(times.length / cols);
     const sc = document.createElement('canvas'); sc.width = cols * w; sc.height = rows * h;

@@ -55,7 +55,7 @@
       G.add(land, grass({ area: [-10, 10, -10, 6], n: 1800, h: .35, ground: land.userData.height, clear: [[0, 0, 2.6], [-1.6, 3.4, 2.6], [.6, 2.6, 1.6]] }));
       plants(G, land, 60, [-60, 60, -80, -6], 3, [[0, 0, 9], [-1, 4, 8]]);
       ringArc(G);
-      const band = { k: P.make('m2'), s1: P.make('w1'), s2: P.make('m3'), s3: P.make('girl'), sower: P.make('w2') };
+      const band = { k: P.make('m2'), s1: P.make('w1', { outfit: ['hood'] }), s2: P.make('m3', { outfit: P.outfit('settler', 2) }), s3: P.make('girl', { outfit: ['hood'] }), sower: P.make('w2', { outfit: P.outfit('settler', 3) }) };
       Object.values(band).forEach(p => G.add(p.root));
       const rock = sph(.34); rock.scale.set(1.25, .75, 1.05); rock.position.set(.13, land.userData.height(.13, .05) + .2, .05); G.add(rock);
       const stones = [sph(.045), sph(.035)]; stones.forEach(x => G.add(x));
@@ -97,10 +97,10 @@
       G.add(land, grass({ area: [-6, 26, -3, 7], n: 2000, h: .2, ground: land.userData.height, clear }));
       plants(G, land, 50, [-20, 60, -70, -9], 7);
       ringArc(G);
-      const band = ['m1', 'w2', 'm3', 'girl', 'w1'].map(n => P.make(n)); band.forEach(p => G.add(p.root));
+      const band = ['m1', 'w2', 'm3', 'girl', 'w1'].map((n, i) => P.make(n, { outfit: P.outfit('settler', i) })); band.forEach(p => G.add(p.root));
       const herd = [P.beast('cow', .85), P.beast('bull', .9), P.beast('cow', .82)]; herd.forEach(b => G.add(b.root));
       const poles = []; for (let i = 0; i < 8; i++) { const r = rod(.04); poles.push(r); G.add(r); }
-      const builders = [P.make('m2'), P.make('w1')]; builders.forEach(p => G.add(p.root));
+      const builders = [P.make('m2', { outfit: ['cap'] }), P.make('w1', { outfit: ['hood'] })]; builders.forEach(p => G.add(p.root));
       return { land, band, herd, poles, builders };
     },
     frame(s, lt, dur, t, { camera }) {
@@ -132,7 +132,7 @@
       ringArc(G);
       const f = fire({ scale: .9, seed: 9 }); G.add(f);
       const shelter = []; for (let i = 0; i < 8; i++) { const r = rod(.04); shelter.push(r); G.add(r); }
-      const ppl = [P.make('w1'), P.make('m1'), P.make('girl')]; ppl.forEach(p => G.add(p.root));
+      const ppl = [P.make('w1', { outfit: ['hood'] }), P.make('m1', { outfit: ['pack'] }), P.make('girl', { outfit: ['hood'] })]; ppl.forEach(p => G.add(p.root));
       const home = glow('#FFD870', 4, 0); G.add(home);
       return { land, f, shelter, ppl, home };
     },

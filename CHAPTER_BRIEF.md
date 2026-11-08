@@ -101,3 +101,39 @@ the sheet comes out black or the render prints `[page error]`: run `node --check
 When your chapter reads, reply with: what each shot shows at its key times, the transition at
 each seam, anything you could not make work, and any screen position the neighbouring chapter
 must match.
+
+## The final pass (2026-11-07 evening)
+
+Alex approved the animatic and asked for the finished film: "make it beautifully animated, take your time,
+go all out". The animatic's shot list, timing and seams stay. Your job is to raise every shot in your
+chapter from blocking to finished.
+
+New in the library (read the top of `lib.js` and `people.js` again):
+
+- **Rim light.** Every silhouette now gets a thin bright edge on the side that faces the key light. By
+  default the key comes from the shot's sky (the sun direction, in the halo colour). Override it per shot
+  through `UP.sky({ rimDir: [x, y, z], rimCol: '#hex', rimK, rimP })`, for example toward a furnace door or
+  a street lamp. `UP.fire()` makes itself the scene's point light (`ptPos`, `ptCol`, `ptK`, `ptR`), so
+  figures near a fire get warm edges. Faces stay dark: this is still a silhouette film.
+- **Era costumes.** `P.make('m1', { outfit: P.outfit('stone' | 'ancient' | 'industry' | 'pilgrim' | 'settler', i) })`,
+  or a list such as `['fur', 'furcape', 'hair']`. Pieces: tunic, fur, robe, skirt, cape, furcape, cloak,
+  hair, hood, cloth, cap, bowler, wide, slouch, top, apron, pack. Capes hang from the shoulders. Do not put
+  long cloaks on crouching or kneeling figures (they read as slabs). Every person in your chapter wears
+  their era.
+- **Rocks:** `UP.rock(r, seed, squash)` gives an irregular low-poly rock. Use it instead of `sph()`.
+
+What "finished" means here:
+
+1. **Every read lands** at full size. Review key frames with `--w=1920` crops, not only thumbnails.
+2. **Motion has weight and life.** No foot sliding (match the root speed to the walk clip; measure the
+   stride if you must). Add secondary action: head turns toward the event, weight shifts, a hand on a
+   hat, animals' heads that dip. Camera moves are eased and motivated, never linear and never dead.
+3. **Mechanisms are true to life**, computed from one driving angle or position.
+4. **Detail where the eye goes:** the focal prop of each shot gets real shape (profiles, spokes, rivets,
+   handles), as silhouettes. Background stays simple.
+5. **Light is the subject:** every shot has a clear key light, a rim that agrees with it, and some motion
+   in the light (flicker, a passing cloud, lamps coming on).
+6. **Seams stay intact,** including the match cuts the neighbouring chapters depend on.
+7. **Performance:** keep a frame under about 150 ms at 1920 x 1080 (`--query=w=1920`).
+
+Report as before: per shot, what changed and what to watch for, with the times of the key moments.
